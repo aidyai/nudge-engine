@@ -32,7 +32,7 @@ The first time, do it by hand. You see errors straight away, and it is faster. A
    Open `https://<your-workspace>--nudge-api-web.modal.run/health`. It should answer `{"status":"ok"}`.
    Run step 5's first command again whenever you change `.env`.
 
-6. **Check it.** `uv run modal run evals/run.py` runs the six scripted conversations. The first run waits while the brain wakes up.
+6. **Check it.** `uv run modal run evals/run.py` runs the eight scripted conversations. The first run waits while the brain wakes up.
 
 7. **The website.** In the `nudge` repo, set `ENGINE_URL` to the API URL and `ENGINE_API_KEY` to your `API_KEY`.
 

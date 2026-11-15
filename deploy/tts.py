@@ -45,14 +45,19 @@ MAX_CHARS = 600  # protects the GPU from one huge request
 VOICE_FILE = Path("/voices/voice.wav")
 GPU = os.environ.get("TTS_GPU", "L4")  # about $0.80 an hour; Modal's example uses the A10 at about $1.10
 
-image = modal.Image.debian_slim(python_version="3.12").uv_pip_install(
-    "chatterbox-tts==0.1.7",
-    "fastapi[standard]==0.124.4",
-    "peft==0.18.0",
-    "setuptools<82",
-)
+image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .uv_pip_install(
+        "chatterbox-tts==0.1.7",
+        "fastapi[standard]==0.124.4",
+        "peft==0.18.0",
+        "setuptools<82",
+    )
+    .env({"HF_HOME": "/cache/huggingface"})
+)  # weights are downloaded once into the volume below, not on every cold start
 
 voices = modal.Volume.from_name("nudge-voices", create_if_missing=True)
+weights = modal.Volume.from_name("chatterbox-cache", create_if_missing=True)
 app = modal.App("nudge-tts", image=image)
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")  # Modal shows stdout and stderr as logs
@@ -94,13 +99,15 @@ def float_to_pcm16(samples: np.ndarray) -> bytes:
     scaledown_window=2 * MINUTES,  # stays warm 2 minutes after the last request
     max_containers=1,  # a runaway client can never start a second GPU
     secrets=[modal.Secret.from_name("huggingface-secret"), modal.Secret.from_name("nudge-models")],
-    volumes={"/voices": voices},
+    volumes={"/voices": voices, "/cache": weights},
 )
 @modal.concurrent(max_inputs=8)
 class Chatterbox:
     @modal.enter()
     def load(self):
         self.model = ChatterboxTurboTTS.from_pretrained(device="cuda")
+        weights.commit()  # keep the downloaded weights for the next cold start
+        self.synthesize("Warming up.")  # the first real request is then not the slow one
 
     @modal.fastapi_endpoint(method="POST", docs=False)
     def speak(self, body: SpeakRequest, authorization: str | None = Header(default=None)) -> Response:

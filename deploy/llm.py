@@ -85,7 +85,7 @@ def build_vllm_command(api_key: str, revision: str | None = None) -> list[str]:
         "0.90",
         "--max-num-seqs",
         "256",
-        "--enable-prefix-caching",  # each turn reuses the cached prompt, tools and history
+        "--enable-prefix-caching",  # on, as the card says. The hit rate is measured in evals/bench.py
         "--async-scheduling",
         "--mamba-ssm-cache-dtype",
         "float32",

@@ -23,7 +23,7 @@ The model decides what to say and which tool to call. Plain code decides what is
 ```
 engine/    the agent, the rules, the API, phone calls
 deploy/    what runs on Modal: llm.py (the brain), tts.py (the voice), api.py
-evals/     scripted borrowers that talk to the real model and check the rules held
+evals/     scripted borrowers, speed benchmarks and the report that turns them into tables
 db/        database migrations
 scripts/   check_services.py, to see that your keys and URLs work
 tests/     unit tests, no keys and no GPU needed
@@ -60,10 +60,27 @@ uv run pytest
 ## Evals
 
 ```
-uv run modal run evals/run.py
+uv run modal run evals/run.py                              # eight scripted borrowers, once
+uv run modal run evals/run.py --runs 5 --label baseline    # five runs each, saved
 ```
 
-Six scripted borrowers talk to the real deployed model: a cooperative one, one who fails verification, one who says stop, one who wants a person, one who tries to trick the agent, and one who offers too little. After each conversation the script checks the rules that must always hold: no digit was spoken, no loan detail before verification, at most one promise, and the expected outcome. It prints PASS or FAIL for each.
+Eight scripted borrowers talk to the real deployed model: a cooperative one, one who fails verification, one who says stop, one who wants a person, one who lost their job, one who says they already paid, one who tries to trick the agent, and one who offers too little.
+
+Two scores, kept apart. **Rules** are what must never break: no digit spoken, nothing about the loan before verification, at most one promise. A broken rule fails the run. **Task** is whether the call reached the right outcome with the right tools; it is reported with a 95% interval, because "5 of 5" is not the same as "100%". The checks are plain code, not an LLM judge, so the same call scores the same way every time.
+
+The method (scripted multi-turn calls, per-turn tool checks, latency percentiles) comes from [aiewf-eval](https://github.com/kwindla/aiewf-eval). We kept only the part that fits a small agent.
+
+## Performance
+
+```
+uv run modal run evals/bench.py::llm --label rtx6000-bf16 --gpu RTX-PRO-6000 --price <usd per hour>
+uv run modal run evals/bench.py::tts --label l4 --gpu L4 --price <usd per hour>
+uv run python -m evals.report --write      # builds docs/performance.md
+```
+
+The brain benchmark replays the five requests of a real call (real prompt, real tools) with 1, 4, 8 and 16 calls at once, and reports time to first token (P50/P95/P99, goal under 700 ms), tokens per second, requests per second, the prefix-cache hit rate, the cost per 1,000 requests, and the cold start. `--tools fixed` sends all eight tools on every request, so you can show what the per-state tool lists buy. Chatterbox cannot stream, so the voice benchmark times whole sentences and reports the real-time factor.
+
+The numbers are in `docs/performance.md`, made by the command above from the files in `evals/results/`. Nothing is typed by hand. If that file says "No results yet", the benchmarks have not been run.
 
 ## Phone calls
 

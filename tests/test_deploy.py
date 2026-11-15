@@ -107,3 +107,11 @@ def test_idle_cost_rules_are_stated_in_the_files():
         assert "max_containers=1" in source
         assert "scaledown_window=2 * MINUTES" in source
     assert "min_containers=0" in open("deploy/llm.py").read()
+
+
+def test_voice_weights_are_cached_and_the_model_is_warmed_up():
+    import inspect
+
+    src = inspect.getsource(tts)
+    assert 'HF_HOME": "/cache/huggingface"' in src and "chatterbox-cache" in src
+    assert "weights.commit()" in src and 'self.synthesize("Warming up.")' in src
