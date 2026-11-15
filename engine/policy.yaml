@@ -1,0 +1,21 @@
+# The numbers behind the hard rules in policy.py.
+# These are PLACEHOLDERS: set them with a lender and a lawyer before any real use.
+# Times are quoted on purpose: unquoted 08:00 is read by YAML as a number.
+
+calling_window:
+  start: "08:00"
+  end: "18:00"
+  timezone: "Africa/Lagos"
+
+attempts:
+  per_day: 2
+  per_week: 5
+  min_gap_minutes: 120
+
+offers:
+  part_payment_min_fraction: "0.5"
+  extension_max_days: 3
+  promise_max_days_ahead: 7
+
+call:
+  max_seconds: 300

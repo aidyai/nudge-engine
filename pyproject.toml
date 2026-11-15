@@ -1,0 +1,49 @@
+[project]
+name = "nudge-engine"
+version = "0.1.0"
+description = "The Nudge agent: loan reminder calls, with the rules enforced by code"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20",
+    "fastapi>=0.162",
+    "httpx>=0.28",
+    "modal>=1.6",
+    "pipecat-ai[deepgram,silero,websocket]>=1.15",
+    "psycopg[binary]>=3.3",
+    "pydantic-settings>=2.16",
+    "pyyaml>=6.0",
+    "sqlalchemy>=2.1",
+    "tzdata",
+    "uvicorn>=0.30",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.170",
+    "pgserver>=0.1.4",
+    "pyright>=1.1.414",
+    "pytest>=9.2",
+    "pytest-asyncio>=1.3",
+    "ruff>=0.17",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"engine/lender.py" = ["E501"]  # SQL strings read best on one line
+
+[tool.pyright]
+include = ["engine", "evals", "scripts", "tests"]
+typeCheckingMode = "basic"

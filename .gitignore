@@ -1,0 +1,59 @@
+# Secrets. Never commit these. (.env.example is the one that is allowed.)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+.modal.toml
+credentials*.json
+service-account*.json
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Binaries and big files: audio, archives, model weights, compiled code, local databases
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+*.webm
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.safetensors
+*.gguf
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.so
+*.dll
+*.dylib
+*.exe
+*.sqlite
+*.sqlite3
+*.db
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log

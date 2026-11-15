@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - run: uv run pytest -q
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # On a push to main, after the checks pass. Deploying only ships code: it never starts a GPU.
+  deploy:
+    needs: [test, secrets]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: uv sync --frozen
+      - name: Model secrets
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MODELS_API_KEY: ${{ secrets.MODELS_API_KEY }}
+        run: |
+          uv run modal secret create huggingface-secret HF_TOKEN="$HF_TOKEN" --force
+          uv run modal secret create nudge-models MODELS_API_KEY="$MODELS_API_KEY" --force
+      # nudge-env (the API's settings) is made by hand from your .env, see docs/deploy.md
+      - run: uv run modal deploy deploy/tts.py
+      - run: uv run modal deploy deploy/llm.py
+      - run: uv run modal deploy deploy/api.py
