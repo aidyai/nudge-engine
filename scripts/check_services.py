@@ -1,6 +1,6 @@
 """Check that every outside service answers to your keys. Prints OK, SKIP or FAIL, never a secret.
 
-    uv run --env-file .env python scripts/check_services.py
+    uv run --env-file .env python -m scripts.check_services
 
 SKIP means "not set up yet" (for example the LLM server before you deploy it). FAIL means something
 is set up but does not work. The speech round trip speaks a sentence with your TTS server and sends
