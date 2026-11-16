@@ -44,3 +44,18 @@ def test_cold_start_lines_show_what_was_different():
     lines = report.cold_lines(runs, "Cold start").splitlines()
     assert lines[0] == "- Cold start `plain`: first request answered after 612 s (d1)"
     assert lines[1] == "- Cold start `snap` (gpu snapshot): first request answered after 48 s (d2)"
+
+
+def test_the_cold_table_lists_every_wake_up_and_the_middle_one():
+    runs = [{"meta": {"label": "snapshot", "note": "snapshot"}, "seconds": [520.0, 95.0, 80.0, 90.0]}]
+    table = report.cold_table(runs)
+    assert "| snapshot | snapshot | 4 | 520, 95, 80, 90 | 80 | 92 | 520 |" in table
+
+
+def test_a_cold_only_report_is_not_empty(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setattr(report, "RESULTS", tmp_path)
+    (tmp_path / "x-cold.json").write_text(json.dumps({"meta": {"label": "x"}, "seconds": [10.0]}))
+    text = report.main()
+    assert "Cold starts" in text and "No results yet" not in text

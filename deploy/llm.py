@@ -164,7 +164,9 @@ SERVER = dict(
     max_containers=1,  # a runaway client can never start a second GPU
     target_concurrency=32,
     exit_grace_period=15,
-    unauthenticated=True,  # the URL is public; vLLM itself checks the API key
+    # Normally the URL is public and vLLM checks the API key. Snapshot mode needs vLLM's dev endpoints, which have NO key
+    # check and include one that runs arbitrary methods on the engine, so there Modal's proxy must stop strangers first.
+    unauthenticated=not SNAPSHOT,
 )
 
 

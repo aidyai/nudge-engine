@@ -13,6 +13,10 @@ Brain (PhoneLLM). One "call" is the 5 requests the agent really makes, with the 
 Voice (Chatterbox). It has no streaming, so we time the whole sentence and divide by the audio length:
     uv run --env-file .env modal run evals/bench.py::tts --label l4 --gpu L4 --price 0.80
 
+Cold starts, on their own (puts the brain to sleep, then wakes it N times and times each wake-up):
+    uv run --env-file .env modal run evals/bench.py::cold --label snapshot --runs 5 --note snapshot
+    --gap 200              seconds to wait before each wake-up, so the server is really stopped (idle limit is 120 s)
+
 Start from a stopped server to measure a cold start (wait 3 minutes after the last request).
 --price is Modal's price for that GPU per hour, from modal.com/pricing. Results go to evals/results/.
 Then:  uv run python -m evals.report --write
@@ -172,12 +176,14 @@ def summarize_level(concurrency: int, rows: list[dict], wall_s: float, price_per
     }
 
 
-async def run_sessions(url: str, key: str, requests: list[dict], concurrency: int, sessions: int) -> list[dict]:
+async def run_sessions(
+    url: str, key: str, requests: list[dict], concurrency: int, sessions: int, extra_headers: dict | None = None
+) -> list[dict]:
     import httpx
 
     gate = asyncio.Semaphore(concurrency)
     rows: list[dict] = []
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=120, headers=extra_headers or {}) as client:
 
         async def session() -> None:
             async with gate:
@@ -188,12 +194,14 @@ async def run_sessions(url: str, key: str, requests: list[dict], concurrency: in
     return rows
 
 
-async def bench_llm_async(url: str, key: str, model: str, tools_mode: str, levels: list[int], price: float) -> dict:
+async def bench_llm_async(
+    url: str, key: str, model: str, tools_mode: str, levels: list[int], price: float, extra_headers: dict | None = None
+) -> dict:
     import httpx
 
     requests = build_requests(tools_mode, model)
     started = time.perf_counter()  # the first request also wakes a stopped server: that is the cold start
-    async with httpx.AsyncClient(timeout=1200) as client:
+    async with httpx.AsyncClient(timeout=1200, headers=extra_headers or {}) as client:
         deadline = time.time() + 1200
         while True:
             r = await one_request(client, url, key, requests[0])
@@ -208,10 +216,35 @@ async def bench_llm_async(url: str, key: str, model: str, tools_mode: str, level
         for c in levels:
             before = await scrape(client, url, key)
             t0 = time.perf_counter()
-            rows = await run_sessions(url, key, requests, c, sessions=max(6, 2 * c))
+            rows = await run_sessions(url, key, requests, c, sessions=max(6, 2 * c), extra_headers=extra_headers)
             wall = time.perf_counter() - t0
             out.append(summarize_level(c, rows, wall, price, hit_rate(before, await scrape(client, url, key))))
     return {"first_request_s": first_request_s, "levels": out}
+
+
+async def first_answer_s(url: str, key: str, model: str, extra_headers: dict | None = None) -> float:
+    """Seconds until a sleeping brain answers its first request (it polls while Modal says 502/503/504)."""
+    import httpx
+
+    body = build_requests("per_state", model)[0]
+    started = time.perf_counter()
+    async with httpx.AsyncClient(timeout=1200, headers=extra_headers or {}) as client:
+        deadline = time.time() + 1500
+        while True:
+            r = await one_request(client, url, key, body)
+            if r["ok"]:
+                return time.perf_counter() - started
+            if r["status"] not in (502, 503, 504) or time.time() > deadline:
+                raise RuntimeError(f"model server answered {r['status']}")
+            await asyncio.sleep(5)
+
+
+@app.function(image=image, secrets=[modal.Secret.from_name("nudge-env")], timeout=30 * 60)
+def wake_once() -> float:
+    from engine.config import Settings
+
+    cfg = Settings()
+    return asyncio.run(first_answer_s(cfg.llm_base_url, cfg.models_api_key, cfg.llm_model, cfg.llm_extra_headers))
 
 
 @app.function(image=image, secrets=[modal.Secret.from_name("nudge-env")], timeout=60 * 60)
@@ -219,7 +252,9 @@ def bench_llm(tools_mode: str, levels: list[int], price: float) -> dict:
     from engine.config import Settings
 
     cfg = Settings()
-    return asyncio.run(bench_llm_async(cfg.llm_base_url, cfg.models_api_key, cfg.llm_model, tools_mode, levels, price))
+    return asyncio.run(
+        bench_llm_async(cfg.llm_base_url, cfg.models_api_key, cfg.llm_model, tools_mode, levels, price, cfg.llm_extra_headers)
+    )
 
 
 # ------------------------------------------------------------------ the voice: whole sentences, no streaming
@@ -334,6 +369,24 @@ def llm(label: str, gpu: str, price: float, levels: str = "1,4,8,16", tools: str
     data = bench_llm.remote(tools, parse_levels(levels), price)
     meta = meta_for("llm", label, gpu, price, model="phonellm-mini-alpha-2", vllm=VLLM_VERSION, tools=tools, note=note)
     print("saved", save("llm", label, meta, data))
+
+
+def cold_run(wake, sleep, runs: int, gap_s: int, say=print) -> list[float]:
+    """Wait for the server to fall asleep, wake it, time it. `wake` and `sleep` are injected so this is testable."""
+    seconds = []
+    for i in range(1, runs + 1):
+        say(f"run {i}/{runs}: waiting {gap_s} s so the brain goes to sleep")
+        sleep(gap_s)
+        seconds.append(wake())
+        say(f"run {i}/{runs}: woke up and answered after {seconds[-1]:.0f} s")
+    return seconds
+
+
+@app.local_entrypoint()
+def cold(label: str, runs: int = 5, gap: int = 200, note: str = ""):
+    seconds = cold_run(wake_once.remote, time.sleep, runs, gap)
+    meta = meta_for("cold", label, "RTX-PRO-6000", 0.0, model="phonellm-mini-alpha-2", vllm=VLLM_VERSION, note=note, gap_s=gap)
+    print("saved", save("cold", label, meta, {"seconds": seconds}))
 
 
 @app.local_entrypoint()

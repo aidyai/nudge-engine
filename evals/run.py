@@ -95,7 +95,7 @@ def run(only: str = "", runs: int = 1) -> dict:
     from engine.seed import seed
 
     cfg = Settings()
-    chat = make_chat(cfg.llm_base_url, cfg.models_api_key, cfg.llm_model)
+    chat = make_chat(cfg.llm_base_url, cfg.models_api_key, cfg.llm_model, extra_headers=cfg.llm_extra_headers)
     engine = create_engine(cfg.database_url)
     out: dict = {}
     for n in range(runs):

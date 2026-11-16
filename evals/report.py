@@ -79,8 +79,22 @@ def cold_lines(runs: list[dict], what: str) -> str:
     )
 
 
+def cold_table(runs: list[dict]) -> str:
+    """One row per cold-start experiment: every wake-up in order (the first one of a snapshot run makes the snapshot)."""
+    rows = ["| run | note | wake-ups | each one (seconds) | best | median | worst |", "|---|---|---|---|---|---|---|"]
+    for r in runs:
+        s = r["seconds"]
+        ordered = sorted(s)
+        mid = ordered[len(ordered) // 2] if len(ordered) % 2 else (ordered[len(ordered) // 2 - 1] + ordered[len(ordered) // 2]) / 2
+        rows.append(
+            f"| {r['meta']['label']} | {r['meta'].get('note') or '-'} | {len(s)} | {', '.join(f'{x:.0f}' for x in s)} | "
+            f"{ordered[0]:.0f} | {mid:.0f} | {ordered[-1]:.0f} |"
+        )
+    return "\n".join(rows)
+
+
 def main(write: bool = False) -> str:
-    llm, tts, agent = load("llm"), load("tts"), load("agent")
+    llm, tts, agent, cold = load("llm"), load("tts"), load("agent"), load("cold")
     parts = [
         "# Performance",
         "",
@@ -118,7 +132,16 @@ def main(write: bool = False) -> str:
             agent_table(agent),
             "",
         ]
-    if not (llm or tts or agent):
+    if cold:
+        parts += [
+            "## Cold starts (brain)",
+            "",
+            "How long a sleeping brain takes to answer its first request. Each row wakes it several times.",
+            "",
+            cold_table(cold),
+            "",
+        ]
+    if not (llm or tts or agent or cold):
         parts += ["No results yet. Run the benchmarks first (see the top of `evals/bench.py`)."]
     text = "\n".join(parts) + "\n"
     if write:

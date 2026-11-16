@@ -80,3 +80,34 @@ def test_the_notebook_adds_the_repo_to_the_python_path():
 @pytest.mark.parametrize("script", ["scripts.check_services", "engine.seed", "evals.report"])
 def test_the_modules_the_notebook_uses_import_from_the_repo_root(script):
     assert importlib.import_module(script)
+
+
+def test_the_one_click_cells_call_things_that_exist():
+    from evals import bench
+    from scripts import launch
+
+    text = "\n".join("".join(c["source"]) for c in json.loads(NOTEBOOK.read_text())["cells"] if c["cell_type"] == "code")
+    assert '"scripts.launch"' in text and callable(launch.main)
+    assert "evals/bench.py::cold" in text and hasattr(bench, "cold")
+    assert "deploy/warm.py::off" in text
+
+
+def test_the_one_click_cells_stream_their_output():
+    """Colab hides the output of a plain subprocess.run, so the cells must print what the command prints."""
+    for cell in json.loads(NOTEBOOK.read_text())["cells"]:
+        src = "".join(cell["source"])
+        if src.startswith("#@title ONE CLICK"):
+            assert "def stream(" in src and "subprocess.run(" not in src
+
+
+def test_the_notebook_code_cells_are_valid_python():
+    import ast
+
+    for cell in json.loads(NOTEBOOK.read_text())["cells"]:
+        if cell["cell_type"] == "code":
+            src = "".join(cell["source"])
+            if not src.lstrip().startswith("%%bash"):
+                lines = [
+                    (ln[: len(ln) - len(ln.lstrip())] + "pass" if ln.lstrip().startswith(("!", "%")) else ln) for ln in src.splitlines()
+                ]
+                ast.parse("\n".join(lines))

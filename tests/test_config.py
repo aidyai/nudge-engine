@@ -28,3 +28,12 @@ def test_the_environment_overrides(monkeypatch):
 def test_allowed_numbers_are_split_and_trimmed(monkeypatch):
     monkeypatch.setenv("ALLOWED_NUMBERS", " +2348012345678 ,+2348098765432,, ")
     assert fresh().allowed_list == ["+2348012345678", "+2348098765432"]
+
+
+def test_the_brain_proxy_headers_only_exist_when_both_halves_are_set():
+    from engine.config import Settings
+
+    assert Settings(_env_file=None).llm_extra_headers == {}  # pyright: ignore[reportCallIssue]
+    assert Settings(_env_file=None, llm_proxy_key="wk-1").llm_extra_headers == {}  # pyright: ignore[reportCallIssue]
+    both = Settings(_env_file=None, llm_proxy_key="wk-1", llm_proxy_secret="ws-2")  # pyright: ignore[reportCallIssue]
+    assert both.llm_extra_headers == {"Modal-Key": "wk-1", "Modal-Secret": "ws-2"}

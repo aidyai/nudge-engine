@@ -72,3 +72,13 @@ def test_results_are_saved_under_the_label(tmp_path, monkeypatch):
 
 def test_levels_are_parsed():
     assert bench.parse_levels("1, 4,8") == [1, 4, 8]
+
+
+def test_cold_run_waits_then_wakes_each_time():
+    from evals import bench
+
+    log: list[str] = []
+    times = iter([500.0, 90.0, 80.0])
+    out = bench.cold_run(lambda: (log.append("wake"), next(times))[1], lambda s: log.append(f"sleep {s}"), 3, 200, say=lambda _: None)
+    assert out == [500.0, 90.0, 80.0]
+    assert log == ["sleep 200", "wake"] * 3

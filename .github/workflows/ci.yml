@@ -54,4 +54,7 @@ jobs:
       # nudge-env (the API's settings) is made by hand from your .env, see docs/deploy.md
       - run: uv run modal deploy deploy/tts.py
       - run: uv run modal deploy deploy/llm.py
+        env:
+          LLM_SNAPSHOT: ${{ vars.LLM_SNAPSHOT }}  # set the repo variable to 1 to deploy the brain in snapshot mode
       - run: uv run modal deploy deploy/api.py
+      - run: uv run modal deploy deploy/warm.py

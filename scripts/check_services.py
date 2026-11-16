@@ -22,8 +22,8 @@ import httpx
 from engine.audio import TTS_SAMPLE_RATE, pcm_to_wav
 from engine.voices import KEYTERMS
 
-PATIENCE_S = 15 * 60  # a cold LLM start downloads and loads a 30B model
-SECRET_NAMES = ("DEEPGRAM_API_KEY", "MODELS_API_KEY", "HF_TOKEN", "DATABASE_URL", "API_KEY")
+PATIENCE_S = 25 * 60  # a cold brain took 9 to 18 minutes to start (Modal's limit is 30)
+SECRET_NAMES = ("DEEPGRAM_API_KEY", "MODELS_API_KEY", "HF_TOKEN", "DATABASE_URL", "API_KEY", "LLM_PROXY_KEY", "LLM_PROXY_SECRET")
 TEST_SENTENCE = "Hello, you owe twenty-five thousand naira, due on Tuesday."
 
 
@@ -101,6 +101,8 @@ def check_llm() -> str:
         "max_tokens": 32,
     }
     headers = {"Authorization": f"Bearer {os.environ['MODELS_API_KEY']}"}
+    if os.environ.get("LLM_PROXY_KEY") and os.environ.get("LLM_PROXY_SECRET"):
+        headers |= {"Modal-Key": os.environ["LLM_PROXY_KEY"], "Modal-Secret": os.environ["LLM_PROXY_SECRET"]}
     print("       waiting for the LLM server; a cold start can take several minutes...", flush=True)
     deadline = time.time() + PATIENCE_S
     while True:
@@ -112,6 +114,8 @@ def check_llm() -> str:
         if response is not None and response.status_code == 200:
             reply = response.json()["choices"][0]["message"]["content"]
             return f"model replied: {str(reply).strip()[:50]!r}"
+        if response is not None and response.status_code in (401, 403) and "Modal-Key" not in headers:
+            raise RuntimeError("the brain wants a Modal proxy token: set LLM_PROXY_KEY and LLM_PROXY_SECRET (see docs/deploy.md)")
         if response is not None and response.status_code not in (502, 503, 504):
             response.raise_for_status()
         if time.time() > deadline:

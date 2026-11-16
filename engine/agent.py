@@ -448,9 +448,9 @@ def finish(call, db, line):
     return line
 
 
-def make_chat(url, key, model, patience_s=1800):
+def make_chat(url, key, model, patience_s=1800, extra_headers=None):
     """The model: any OpenAI-style server. A cold Modal server answers 503 for a few minutes, so we wait."""
-    client = httpx.Client(timeout=120)
+    client = httpx.Client(timeout=120, headers=extra_headers or {})
 
     def chat(messages, tools):
         deadline = time.time() + patience_s

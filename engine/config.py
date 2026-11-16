@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     llm_base_url: str = ""
     llm_model: str = "phonellm-mini-alpha-2"
     tts_url: str = ""
+    # Modal proxy auth token for the brain (only needed when it is deployed with LLM_SNAPSHOT=1, see deploy/llm.py)
+    llm_proxy_key: str = ""  # looks like wk-...
+    llm_proxy_secret: str = ""  # looks like ws-...
     deepgram_api_key: str = ""
     hf_token: str = ""  # only used by scripts/check_services.py
 
@@ -24,6 +27,13 @@ class Settings(BaseSettings):
     twilio_auth_token: str = ""
     twilio_from_number: str = ""
     allowed_numbers: str = ""  # comma separated, with country code: +2348012345678,+2348098765432
+
+    @property
+    def llm_extra_headers(self) -> dict[str, str]:
+        """Headers that get past Modal's proxy to the brain. Empty when the brain is public (the default)."""
+        if self.llm_proxy_key and self.llm_proxy_secret:
+            return {"Modal-Key": self.llm_proxy_key, "Modal-Secret": self.llm_proxy_secret}
+        return {}
 
     @property
     def allowed_list(self) -> list[str]:

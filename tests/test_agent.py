@@ -265,3 +265,20 @@ def test_a_full_call_from_greeting_to_saved_promise(db):
     assert model.offered[0] == STATES["verify"] and STATES["confirm"] in model.offered  # the model only ever saw the tools for its state
     kinds = {r[0] for r in db.execute(text("select distinct type from nudge.events where call_id = cast(:i as uuid)"), {"i": call.id})}
     assert {"call_started", "user", "agent", "model", "tool", "policy"} <= kinds
+
+
+def test_the_model_client_sends_the_proxy_headers(monkeypatch):
+    import httpx
+
+    from engine import agent
+
+    seen = {}
+    real = httpx.Client
+
+    def spy(**kwargs):
+        seen.update(kwargs)
+        return real(**kwargs)
+
+    monkeypatch.setattr(agent.httpx, "Client", spy)
+    agent.make_chat("https://brain.test/v1", "key", "m", extra_headers={"Modal-Key": "wk-1", "Modal-Secret": "ws-2"})
+    assert seen["headers"] == {"Modal-Key": "wk-1", "Modal-Secret": "ws-2"}

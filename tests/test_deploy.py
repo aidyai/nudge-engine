@@ -136,11 +136,13 @@ def test_the_default_deploy_does_not_open_vllms_dev_endpoints(monkeypatch):
     import importlib
 
     assert "VLLM_SERVER_DEV_MODE" not in llm.IMAGE_ENV and llm.SNAPSHOT is False
+    assert llm.SERVER["unauthenticated"] is True  # public URL, vLLM checks the API key on /v1
     monkeypatch.setenv("LLM_SNAPSHOT", "1")
     try:
         snap = importlib.reload(llm)
         assert snap.SNAPSHOT and snap.IMAGE_ENV["VLLM_SERVER_DEV_MODE"] == "1"
         assert snap.IMAGE_ENV["TORCHINDUCTOR_COMPILE_THREADS"] == "1"
+        assert snap.SERVER["unauthenticated"] is False  # the dev endpoints have no key check, so Modal's proxy must guard the door
     finally:
         monkeypatch.delenv("LLM_SNAPSHOT")
         importlib.reload(llm)
