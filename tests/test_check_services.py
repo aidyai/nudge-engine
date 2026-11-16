@@ -64,3 +64,25 @@ def test_the_voice_check_follows_modals_cold_start_redirect(monkeypatch):
     monkeypatch.setattr(httpx, "post", fake_post)
     cs._speak("hello")
     assert seen["follow_redirects"] is True
+
+
+def test_the_round_trip_fails_if_naira_is_not_heard(monkeypatch):
+    from engine.audio import TTS_SAMPLE_RATE
+
+    def fake_post(url, **kwargs):
+        if "deepgram" in url:
+            body = {
+                "results": {
+                    "channels": [{"alternatives": [{"transcript": "hello you owe twenty five thousand twenty dra due on tuesday"}]}]
+                }
+            }
+            return httpx.Response(200, json=body, request=httpx.Request("POST", url))
+        return httpx.Response(
+            200, content=b"\x01\x00" * 10, headers={"x-sample-rate": str(TTS_SAMPLE_RATE)}, request=httpx.Request("POST", url)
+        )
+
+    for name, value in {"MODELS_API_KEY": "k", "TTS_URL": "https://tts.test/speak", "DEEPGRAM_API_KEY": "dg"}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(httpx, "post", fake_post)
+    with pytest.raises(RuntimeError, match="naira"):
+        cs.check_round_trip()

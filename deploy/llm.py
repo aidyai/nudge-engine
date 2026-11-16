@@ -12,8 +12,9 @@ Logs (request lines and throughput stats, never prompts or replies):
     uv run modal app logs nudge-llm -f     # follow live
 
 Cold start options (all measured by evals/bench.py, see docs/performance.md):
-  - caches always on: weights, vLLM's torch.compile and FlashInfer caches, and Triton kernels live in Volumes,
-    so the second cold start skips the downloads and compiles the first one paid for.
+  - caches always on: weights, vLLM's torch.compile cache and FlashInfer's autotune cache live in Volumes.
+    Triton kernels are NOT moved there: we tried (TRITON_CACHE_DIR in the volume) and the next cold start went
+    from about 9 minutes to over 18, with "Cubin file saved by TritonBundler not found" errors. See docs/deploy.md.
   - LLM_SNAPSHOT=1 at deploy time: Modal's GPU memory snapshot (alpha). vLLM starts once, warms up, goes to
     sleep, and Modal saves the process. Later cold starts restore it instead of redoing the warm-up.
         LLM_SNAPSHOT=1 uv run modal deploy deploy/llm.py
@@ -56,7 +57,6 @@ IMAGE_ENV = {
     "HF_HUB_CACHE": "/root/.cache/huggingface",
     "HF_XET_HIGH_PERFORMANCE": "1",
     "VLLM_LOG_STATS_INTERVAL": "10",  # throughput lines in the logs every 10 seconds
-    "TRITON_CACHE_DIR": "/root/.cache/vllm/triton",  # compiled kernels survive in the volume (the first start spent minutes on them)
 }
 if SNAPSHOT:
     IMAGE_ENV |= {
@@ -117,7 +117,7 @@ def build_vllm_command(api_key: str, revision: str | None = None, sleep_mode: bo
     return cmd
 
 
-def wait_until_healthy(process: subprocess.Popen, timeout: float = 20 * MINUTES) -> None:
+def wait_until_healthy(process: subprocess.Popen, timeout: float = 30 * MINUTES) -> None:
     """Block until vLLM answers /health. Fail loudly if it crashes instead of hanging."""
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -158,7 +158,7 @@ SERVER = dict(
     volumes={"/root/.cache/huggingface": hf_cache, "/root/.cache/vllm": vllm_cache},
     secrets=[modal.Secret.from_name("huggingface-secret"), modal.Secret.from_name("nudge-models")],
     port=PORT,
-    startup_timeout=20 * MINUTES,  # time to download weights and start vLLM
+    startup_timeout=30 * MINUTES,  # a cold start took 9 to 18 minutes in testing; Modal kills the container at this limit
     scaledown_window=2 * MINUTES,  # stay up this long after the last request, then stop paying
     min_containers=MIN_CONTAINERS,  # 0: nothing runs (or costs) while idle. Set LLM_MIN_CONTAINERS=1 for a calling window.
     max_containers=1,  # a runaway client can never start a second GPU

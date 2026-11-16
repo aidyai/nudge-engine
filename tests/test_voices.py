@@ -84,6 +84,7 @@ def test_make_stt_needs_a_key_and_uses_nova_3():
         make_stt(settings())
     stt = make_stt(settings(deepgram_api_key="dg-key"))
     assert stt._settings.model == "nova-3-general"  # pyright: ignore[reportPrivateUsage]
+    assert "naira" in stt._settings.keyterm  # pyright: ignore[reportPrivateUsage, reportOperatorIssue]
 
 
 def test_make_tts_needs_its_url_and_key():

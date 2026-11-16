@@ -23,7 +23,7 @@ from starlette.concurrency import run_in_threadpool
 from engine import agent
 from engine.audio import pcm_to_wav
 from engine.phone import add_phone_routes, run_phone_call
-from engine.voices import SynthesisError, pcm_from_reply
+from engine.voices import KEYTERMS, SynthesisError, pcm_from_reply
 
 DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
 MAX_CALLS_KEPT = 50
@@ -115,7 +115,7 @@ def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_a
             r = await run_in_threadpool(
                 lambda: http.post(
                     DEEPGRAM_URL,
-                    params={"model": "nova-3", "smart_format": "true", "punctuate": "true"},
+                    params={"model": "nova-3", "smart_format": "true", "punctuate": "true", "keyterm": KEYTERMS},
                     headers=headers,
                     content=audio,
                     timeout=30,

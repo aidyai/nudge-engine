@@ -17,6 +17,10 @@ from engine.config import Settings
 CHUNK_BYTES = TTS_SAMPLE_RATE * 2 // 10  # 100 ms of audio per frame, always a whole number of samples
 
 
+# Words Deepgram should favour. Without this it heard "naira" as "twenty dra" (found with scripts/check_services.py).
+KEYTERMS = ["naira", "kobo"]
+
+
 def make_stt(settings: Settings) -> DeepgramSTTService:
     """Deepgram Nova-3, streaming, English."""
     if not settings.deepgram_api_key:
@@ -28,6 +32,7 @@ def make_stt(settings: Settings) -> DeepgramSTTService:
             language=Language.EN,
             interim_results=True,
             punctuate=True,
+            keyterm=KEYTERMS,
         ),
     )
 

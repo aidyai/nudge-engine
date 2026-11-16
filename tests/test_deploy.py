@@ -122,8 +122,13 @@ def test_sleep_mode_is_only_added_when_asked():
     assert "--enable-sleep-mode" in llm.build_vllm_command("k", sleep_mode=True)
 
 
-def test_compiled_kernels_are_kept_in_the_volume_by_default():
-    assert llm.IMAGE_ENV["TRITON_CACHE_DIR"].startswith("/root/.cache/vllm/")  # the volume that outlives the container
+def test_triton_kernels_stay_out_of_the_volume():
+    """Measured: putting TRITON_CACHE_DIR in the volume doubled the cold start (9 to 18 minutes) and broke torch's cache."""
+    assert "TRITON_CACHE_DIR" not in llm.IMAGE_ENV
+
+
+def test_startup_may_take_longer_than_the_slowest_cold_start_we_saw():
+    assert int(llm.SERVER["startup_timeout"]) >= 30 * 60  # pyright: ignore[reportArgumentType]  # the 18 minute start was killed by a 20 minute limit
 
 
 def test_the_default_deploy_does_not_open_vllms_dev_endpoints(monkeypatch):

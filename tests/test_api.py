@@ -110,6 +110,7 @@ def test_a_recording_becomes_text(pg_engine, db):
     sent = upstream.calls[0]
     assert sent.headers["authorization"] == "Token dg" and sent.headers["content-type"] == "audio/webm;codecs=opus"
     assert sent.url.params["model"] == "nova-3"
+    assert "naira" in sent.url.params.get_list("keyterm")  # Deepgram heard "naira" as "twenty dra" without it
 
 
 @pytest.mark.parametrize(("headers", "body", "status"), [

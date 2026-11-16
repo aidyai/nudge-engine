@@ -20,6 +20,7 @@ from pathlib import Path
 import httpx
 
 from engine.audio import TTS_SAMPLE_RATE, pcm_to_wav
+from engine.voices import KEYTERMS
 
 PATIENCE_S = 15 * 60  # a cold LLM start downloads and loads a 30B model
 SECRET_NAMES = ("DEEPGRAM_API_KEY", "MODELS_API_KEY", "HF_TOKEN", "DATABASE_URL", "API_KEY")
@@ -147,7 +148,8 @@ def check_round_trip() -> str:
     _need("DEEPGRAM_API_KEY")
     wav = pcm_to_wav(_speak(TEST_SENTENCE))
     r = httpx.post(
-        "https://api.deepgram.com/v1/listen?model=nova-3",
+        "https://api.deepgram.com/v1/listen",
+        params={"model": "nova-3", "keyterm": KEYTERMS},
         headers={"Authorization": f"Token {os.environ['DEEPGRAM_API_KEY']}", "Content-Type": "audio/wav"},
         content=wav,
         timeout=60,
@@ -155,6 +157,8 @@ def check_round_trip() -> str:
     r.raise_for_status()
     heard = r.json()["results"]["channels"][0]["alternatives"][0]["transcript"]
     score = similarity(TEST_SENTENCE, heard)
+    if "naira" not in heard.lower():  # the word every call depends on
+        raise RuntimeError(f"Deepgram heard {heard!r}: it did not catch the word naira")
     if score < 0.8:
         raise RuntimeError(f"Deepgram heard {heard!r}, which is not close to what was said")
     return f"said and heard back: {heard!r}"
