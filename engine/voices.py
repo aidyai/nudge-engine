@@ -103,6 +103,7 @@ class ChatterboxTTSService(TTSService):
                 json={"text": text},
                 headers={"Authorization": f"Bearer {self._api_key}"},
                 timeout=self._timeout_s,
+                follow_redirects=True,  # a cold start makes Modal answer 303: the audio is at the address it gives
             )
         except httpx.HTTPError as e:
             raise SynthesisError(f"could not reach the speech server ({type(e).__name__})") from e

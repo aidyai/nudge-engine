@@ -90,3 +90,14 @@ def test_make_tts_needs_its_url_and_key():
     with pytest.raises(ValueError, match="TTS_URL"):
         make_tts(settings())
     assert make_tts(settings(tts_url="https://tts.test/speak", models_api_key="k"))
+
+
+async def test_a_cold_start_303_is_followed_to_the_audio():
+    """Modal answers 303 when a cold start outlasts 150 seconds. The audio is at the address it gives."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/speak":
+            return httpx.Response(303, headers={"location": "https://tts.test/result/abc"})
+        return good_reply(request)
+
+    assert await tts_with(handler).synthesize("Hello there.") == AUDIO

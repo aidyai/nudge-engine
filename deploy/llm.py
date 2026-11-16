@@ -11,6 +11,14 @@ Logs (request lines and throughput stats, never prompts or replies):
     uv run modal app logs nudge-llm        # last 100 lines
     uv run modal app logs nudge-llm -f     # follow live
 
+Cold start options (all measured by evals/bench.py, see docs/performance.md):
+  - caches always on: weights, vLLM's torch.compile and FlashInfer caches, and Triton kernels live in Volumes,
+    so the second cold start skips the downloads and compiles the first one paid for.
+  - LLM_SNAPSHOT=1 at deploy time: Modal's GPU memory snapshot (alpha). vLLM starts once, warms up, goes to
+    sleep, and Modal saves the process. Later cold starts restore it instead of redoing the warm-up.
+        LLM_SNAPSHOT=1 uv run modal deploy deploy/llm.py
+  - LLM_MIN_CONTAINERS=1: keep one replica warm for a calling window (it bills while up).
+
 Cost rules built in: nothing runs while idle (min_containers=0), a container stops 2 minutes after
 its last request, and at most one container can ever run (max_containers=1).
 
@@ -24,6 +32,7 @@ Two things the card says not to do, and we do not do: --enforce-eager (CUDA grap
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
@@ -38,20 +47,28 @@ MODEL = "pipecat-ai/phonellm-mini-alpha-2"
 SERVED_NAME = "phonellm-mini-alpha-2"
 MODEL_REVISION = os.environ.get("MODEL_REVISION")  # pin to a commit hash after the first good deploy
 VLLM_VERSION = "0.30.0"  # the version the model card's recipe was measured on
+SNAPSHOT = os.environ.get("LLM_SNAPSHOT") == "1"  # opt in: it is an alpha feature, so we measure it before trusting it
+MIN_CONTAINERS = int(os.environ.get("LLM_MIN_CONTAINERS", "0"))
 # BF16 weights are about 64 GB. The card lists the RTX PRO 6000 (96 GB) for production serving.
 GPU = os.environ.get("LLM_GPU", "RTX-PRO-6000")
+
+IMAGE_ENV = {
+    "HF_HUB_CACHE": "/root/.cache/huggingface",
+    "HF_XET_HIGH_PERFORMANCE": "1",
+    "VLLM_LOG_STATS_INTERVAL": "10",  # throughput lines in the logs every 10 seconds
+    "TRITON_CACHE_DIR": "/root/.cache/vllm/triton",  # compiled kernels survive in the volume (the first start spent minutes on them)
+}
+if SNAPSHOT:
+    IMAGE_ENV |= {
+        "VLLM_SERVER_DEV_MODE": "1",  # turns on the /sleep and /wake_up endpoints that snapshotting needs
+        "TORCHINDUCTOR_COMPILE_THREADS": "1",  # Modal: makes torch.compile compatible with snapshots
+    }
 
 image = (
     modal.Image.from_registry("nvidia/cuda:12.9.0-devel-ubuntu22.04", add_python="3.12")
     .entrypoint([])
     .uv_pip_install(f"vllm=={VLLM_VERSION}")
-    .env(
-        {
-            "HF_HUB_CACHE": "/root/.cache/huggingface",
-            "HF_XET_HIGH_PERFORMANCE": "1",
-            "VLLM_LOG_STATS_INTERVAL": "10",  # throughput lines in the logs every 10 seconds
-        }
-    )
+    .env(IMAGE_ENV)
 )
 
 hf_cache = modal.Volume.from_name("huggingface-cache", create_if_missing=True)
@@ -60,7 +77,7 @@ vllm_cache = modal.Volume.from_name("vllm-cache", create_if_missing=True)
 app = modal.App("nudge-llm")
 
 
-def build_vllm_command(api_key: str, revision: str | None = None) -> list[str]:
+def build_vllm_command(api_key: str, revision: str | None = None, sleep_mode: bool = False) -> list[str]:
     """The `vllm serve` command. A plain function so a test can check the flags."""
     cmd = [
         "vllm",
@@ -95,6 +112,8 @@ def build_vllm_command(api_key: str, revision: str | None = None) -> list[str]:
     ]
     if revision:
         cmd += ["--revision", revision]
+    if sleep_mode:
+        cmd += ["--enable-sleep-mode"]  # lets us park the engine before Modal takes the snapshot
     return cmd
 
 
@@ -114,7 +133,26 @@ def wait_until_healthy(process: subprocess.Popen, timeout: float = 20 * MINUTES)
     raise TimeoutError(f"vLLM was not healthy after {timeout:.0f} seconds")
 
 
-@app.server(
+def call_vllm(path: str, api_key: str, body: dict | None = None, timeout: float = 600) -> None:
+    """POST to the vLLM server running in this container. Used for warm-up, sleep and wake_up."""
+    data = json.dumps(body).encode() if body is not None else b""
+    request = urllib.request.Request(
+        f"http://127.0.0.1:{PORT}{path}",
+        data=data,
+        method="POST",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(request, timeout=timeout).read()
+
+
+def warm_up(api_key: str, rounds: int = 3) -> None:
+    """A few real requests, so the kernels they need are compiled before the snapshot is taken."""
+    body = {"model": SERVED_NAME, "messages": [{"role": "user", "content": "Say hello."}], "max_tokens": 16}
+    for _ in range(rounds):
+        call_vllm("/v1/chat/completions", api_key, body)
+
+
+SERVER = dict(
     image=image,
     gpu=GPU,
     volumes={"/root/.cache/huggingface": hf_cache, "/root/.cache/vllm": vllm_cache},
@@ -122,18 +160,53 @@ def wait_until_healthy(process: subprocess.Popen, timeout: float = 20 * MINUTES)
     port=PORT,
     startup_timeout=20 * MINUTES,  # time to download weights and start vLLM
     scaledown_window=2 * MINUTES,  # stay up this long after the last request, then stop paying
-    min_containers=0,  # nothing runs (or costs) while idle. Warm it before a calling window.
+    min_containers=MIN_CONTAINERS,  # 0: nothing runs (or costs) while idle. Set LLM_MIN_CONTAINERS=1 for a calling window.
     max_containers=1,  # a runaway client can never start a second GPU
     target_concurrency=32,
     exit_grace_period=15,
     unauthenticated=True,  # the URL is public; vLLM itself checks the API key
 )
-class Server:
-    @modal.enter()
-    def start(self):
-        self.process = subprocess.Popen(build_vllm_command(os.environ["MODELS_API_KEY"], MODEL_REVISION))
-        wait_until_healthy(self.process)
 
-    @modal.exit()
-    def stop(self):
-        self.process.terminate()
+
+def save_caches() -> None:
+    try:
+        vllm_cache.commit()  # keep the compiled kernels for the next cold start
+    except Exception as e:  # never let a cache problem break shutdown
+        print(f"could not save the vLLM cache: {e}")
+
+
+if SNAPSHOT:
+
+    @app.server(**SERVER, enable_memory_snapshot=True, experimental_options={"enable_gpu_snapshot": True})
+    class Server:
+        @modal.enter(snap=True)
+        def start(self):
+            key = os.environ["MODELS_API_KEY"]
+            self.process = subprocess.Popen(build_vllm_command(key, MODEL_REVISION, sleep_mode=True))
+            wait_until_healthy(self.process)
+            warm_up(key)
+            call_vllm("/sleep?level=1", key)  # weights move to CPU memory, the GPU is emptied, then Modal snapshots
+
+        @modal.enter(snap=False)
+        def wake(self):
+            call_vllm("/wake_up", os.environ["MODELS_API_KEY"])
+            wait_until_healthy(self.process)
+
+        @modal.exit()
+        def stop(self):
+            self.process.terminate()
+            save_caches()
+
+else:
+
+    @app.server(**SERVER)
+    class Server:
+        @modal.enter()
+        def start(self):
+            self.process = subprocess.Popen(build_vllm_command(os.environ["MODELS_API_KEY"], MODEL_REVISION))
+            wait_until_healthy(self.process)
+
+        @modal.exit()
+        def stop(self):
+            self.process.terminate()
+            save_caches()

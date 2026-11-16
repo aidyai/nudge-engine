@@ -8,6 +8,7 @@ Brain (PhoneLLM). One "call" is the 5 requests the agent really makes, with the 
     uv run --env-file .env modal run evals/bench.py::llm --label rtx6000-bf16 --gpu RTX-PRO-6000 --price 3.03
     --tools fixed          every request carries all 8 tools (the "before" in the tools experiment)
     --levels 1,4,8,16      how many calls run at the same time
+    --note snapshot        what was different about this deploy (shown next to the cold start in the report)
 
 Voice (Chatterbox). It has no streaming, so we time the whole sentence and divide by the audio length:
     uv run --env-file .env modal run evals/bench.py::tts --label l4 --gpu L4 --price 0.80
@@ -239,7 +240,7 @@ SENTENCES = {
 
 async def speak_once(client, url: str, key: str, text: str) -> dict:
     started = time.perf_counter()
-    r = await client.post(url, json={"text": text}, headers={"Authorization": f"Bearer {key}"})
+    r = await client.post(url, json={"text": text}, headers={"Authorization": f"Bearer {key}"}, follow_redirects=True)
     if r.status_code != 200:
         return {"ok": False, "status": r.status_code}
     ms = (time.perf_counter() - started) * 1000
@@ -329,9 +330,9 @@ def parse_levels(text: str) -> list[int]:
 
 
 @app.local_entrypoint()
-def llm(label: str, gpu: str, price: float, levels: str = "1,4,8,16", tools: str = "per_state"):
+def llm(label: str, gpu: str, price: float, levels: str = "1,4,8,16", tools: str = "per_state", note: str = ""):
     data = bench_llm.remote(tools, parse_levels(levels), price)
-    meta = meta_for("llm", label, gpu, price, model="phonellm-mini-alpha-2", vllm=VLLM_VERSION, tools=tools)
+    meta = meta_for("llm", label, gpu, price, model="phonellm-mini-alpha-2", vllm=VLLM_VERSION, tools=tools, note=note)
     print("saved", save("llm", label, meta, data))
 
 

@@ -73,7 +73,9 @@ def agent_table(runs: list[dict]) -> str:
 
 def cold_lines(runs: list[dict], what: str) -> str:
     return "\n".join(
-        f"- {what} `{r['meta']['label']}`: first request answered after {r['first_request_s']:.0f} s ({r['meta']['date']})" for r in runs
+        f"- {what} `{r['meta']['label']}`{' (' + r['meta']['note'] + ')' if r['meta'].get('note') else ''}: "
+        f"first request answered after {r['first_request_s']:.0f} s ({r['meta']['date']})"
+        for r in runs
     )
 
 

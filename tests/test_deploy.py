@@ -115,3 +115,40 @@ def test_voice_weights_are_cached_and_the_model_is_warmed_up():
     src = inspect.getsource(tts)
     assert 'HF_HOME": "/cache/huggingface"' in src and "chatterbox-cache" in src
     assert "weights.commit()" in src and 'self.synthesize("Warming up.")' in src
+
+
+def test_sleep_mode_is_only_added_when_asked():
+    assert "--enable-sleep-mode" not in llm.build_vllm_command("k")
+    assert "--enable-sleep-mode" in llm.build_vllm_command("k", sleep_mode=True)
+
+
+def test_compiled_kernels_are_kept_in_the_volume_by_default():
+    assert llm.IMAGE_ENV["TRITON_CACHE_DIR"].startswith("/root/.cache/vllm/")  # the volume that outlives the container
+
+
+def test_the_default_deploy_does_not_open_vllms_dev_endpoints(monkeypatch):
+    """VLLM_SERVER_DEV_MODE adds /sleep and /wake_up, which the API key does not protect. Only the snapshot build has it."""
+    import importlib
+
+    assert "VLLM_SERVER_DEV_MODE" not in llm.IMAGE_ENV and llm.SNAPSHOT is False
+    monkeypatch.setenv("LLM_SNAPSHOT", "1")
+    try:
+        snap = importlib.reload(llm)
+        assert snap.SNAPSHOT and snap.IMAGE_ENV["VLLM_SERVER_DEV_MODE"] == "1"
+        assert snap.IMAGE_ENV["TORCHINDUCTOR_COMPILE_THREADS"] == "1"
+    finally:
+        monkeypatch.delenv("LLM_SNAPSHOT")
+        importlib.reload(llm)
+    assert llm.SNAPSHOT is False
+
+
+def test_one_replica_can_be_kept_warm_for_a_calling_window(monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("LLM_MIN_CONTAINERS", "1")
+    try:
+        assert importlib.reload(llm).MIN_CONTAINERS == 1
+    finally:
+        monkeypatch.delenv("LLM_MIN_CONTAINERS")
+        importlib.reload(llm)
+    assert llm.MIN_CONTAINERS == 0 and llm.SERVER["max_containers"] == 1  # never more than one GPU

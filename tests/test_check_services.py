@@ -1,6 +1,7 @@
 import io
 import wave
 
+import httpx
 import pytest
 
 from engine.audio import pcm_to_wav
@@ -45,3 +46,21 @@ def test_with_nothing_set_up_the_checker_fails_cleanly_and_skips_the_models(monk
 def test_secrets_never_reach_the_output(monkeypatch):
     monkeypatch.setenv("MODELS_API_KEY", "super-secret-value")
     assert "super-secret-value" not in cs._scrub("the key super-secret-value was rejected")
+
+
+def test_the_voice_check_follows_modals_cold_start_redirect(monkeypatch):
+    from engine.audio import TTS_SAMPLE_RATE
+
+    seen = {}
+
+    def fake_post(url, **kwargs):
+        seen.update(kwargs)
+        return httpx.Response(
+            200, content=b"\x01\x00" * 10, headers={"x-sample-rate": str(TTS_SAMPLE_RATE)}, request=httpx.Request("POST", url)
+        )
+
+    monkeypatch.setenv("MODELS_API_KEY", "k")
+    monkeypatch.setenv("TTS_URL", "https://tts.test/speak")
+    monkeypatch.setattr(httpx, "post", fake_post)
+    cs._speak("hello")
+    assert seen["follow_redirects"] is True

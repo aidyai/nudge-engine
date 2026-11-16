@@ -125,6 +125,7 @@ def _speak(text: str) -> bytes:
         json={"text": text},
         headers={"Authorization": f"Bearer {os.environ['MODELS_API_KEY']}"},
         timeout=300,  # the first request starts a GPU container
+        follow_redirects=True,  # Modal answers 303 when a cold start takes over 150 s, and the result comes from the new address
     )
     r.raise_for_status()
     if r.headers.get("x-sample-rate") != str(TTS_SAMPLE_RATE) or not r.content or len(r.content) % 2:

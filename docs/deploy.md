@@ -64,3 +64,14 @@ The voice logs only sizes and timings, never the text.
 Nothing runs while idle: each service stops a few minutes after its last request, and each is limited to one container.
 While running, the brain costs a few dollars an hour and the voice under one. Modal's free plan includes monthly credit, and the budget you set caps the rest.
 The first request after a quiet spell is slow because the brain has to start.
+
+## Cold starts and cost
+
+A stopped brain costs nothing, and the price is the first request: the first cold start took about 10 minutes (about 2 minutes downloading 59 GB of weights, about 8 minutes compiling and warming up). Everything below is measured by `evals/bench.py`, so the claims in `docs/performance.md` come from runs, not from this page.
+
+- **Caches (always on).** The weights, vLLM's `torch.compile` cache, FlashInfer's autotune cache and the Triton kernels all live in Modal Volumes, and the volume is saved when the container exits. The second cold start skips what the first one paid for.
+- **GPU snapshot (opt in).** `LLM_SNAPSHOT=1 uv run modal deploy deploy/llm.py`. vLLM starts once, warms up, goes to sleep, and Modal snapshots the process, so later cold starts restore it instead of redoing the warm-up. It is an alpha Modal feature, it takes a few cold starts to take effect, and a redeploy throws old snapshots away. It also turns on vLLM's `/sleep` and `/wake_up` endpoints, which the API key does not protect: anyone with the URL could put the server to sleep. That is why it is off by default.
+- **A warm replica for a calling window.** `LLM_MIN_CONTAINERS=1 uv run modal deploy deploy/llm.py`. It bills while it is up, so set it back to 0 afterwards.
+- **One GPU, always.** `max_containers=1` and the 2 minute scale-down window cap the bill. Raise them only when a benchmark says you need to.
+
+What this does not do: FP8 or other quantisation, a second region, or routing that keeps one caller on one replica. They are the next experiments, and each one would be a new line in the performance table.

@@ -140,7 +140,11 @@ def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_a
             raise HTTPException(503, "TTS_URL and MODELS_API_KEY are not set")
         try:
             r = http.post(
-                cfg.tts_url, json={"text": body.text}, headers={"Authorization": f"Bearer {cfg.models_api_key}"}, timeout=120
+                cfg.tts_url,
+                json={"text": body.text},
+                headers={"Authorization": f"Bearer {cfg.models_api_key}"},
+                timeout=120,
+                follow_redirects=True,  # a cold start makes Modal answer 303
             )  # the first request starts a GPU
             pcm = pcm_from_reply(r)
         except httpx.HTTPError as e:
