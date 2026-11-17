@@ -29,6 +29,13 @@ class Fake:
     def update_autoscaler(self, **kwargs):
         self.calls.append(kwargs)
 
+    @property
+    def autoscaler(self):
+        return self
+
+    def update(self, **kwargs):
+        self.calls.append(kwargs)
+
 
 @pytest.mark.parametrize("count", [0, 1])
 def test_turning_on_and_off_reaches_both_the_brain_and_the_voice(monkeypatch, count):
@@ -39,12 +46,9 @@ def test_turning_on_and_off_reaches_both_the_brain_and_the_voice(monkeypatch, co
         names["brain"] = (app, name)
         return brain
 
-    class FakeVoice:
-        speak = voice
-
     def cls_from_name(app, name):
         names["voice"] = (app, name)
-        return FakeVoice
+        return lambda: voice  # calling the class gives the instance, which is where Modal wants the update
 
     monkeypatch.setattr(modal.Server, "from_name", server_from_name)
     monkeypatch.setattr(modal.Cls, "from_name", cls_from_name)
@@ -60,4 +64,4 @@ def test_the_app_names_match_what_the_deploy_files_create():
 
     assert warm.BRAIN[0] == llm.app.name and f"class {warm.BRAIN[1]}:" in inspect.getsource(llm)
     assert warm.VOICE[0] == tts.app.name and f"class {warm.VOICE[1]}:" in inspect.getsource(tts)
-    assert "def speak(" in inspect.getsource(tts)  # the method whose autoscaler we change
+    assert "def speak(" in inspect.getsource(tts)

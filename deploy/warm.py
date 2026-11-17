@@ -54,9 +54,9 @@ def window_crons(start, end, lead_minutes: int = LEAD_MINUTES, days: str = DAYS)
 def set_warm(count: int) -> list[str]:
     """Ask Modal to keep `count` copies of the brain and the voice running (0 lets them sleep). Returns what it did."""
     done = []
-    modal.Server.from_name(*BRAIN).update_autoscaler(min_containers=count)
+    modal.Server.from_name(*BRAIN).autoscaler.update(min_containers=count)
     done.append(f"brain: min_containers={count}")
-    modal.Cls.from_name(*VOICE)().speak.update_autoscaler(min_containers=count)
+    modal.Cls.from_name(*VOICE)().update_autoscaler(min_containers=count)  # on the class instance: Modal refuses it on a method
     done.append(f"voice: min_containers={count}")
     return done
 
