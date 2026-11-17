@@ -25,8 +25,8 @@ engine/    the agent, the rules, the API, phone calls
 deploy/    what runs on Modal: llm.py (the brain), tts.py (the voice), api.py
 evals/     scripted borrowers, speed benchmarks and the report that turns them into tables
 db/        database migrations
-scripts/   check_services.py, to see that your keys and URLs work
-notebooks/ the Colab notebook that deploys and tests each piece
+scripts/   launch.py (one-command setup), simulate_call.py (a voice call without a phone), check_services.py
+notebooks/ the Colab notebook: setup, a simulated call, evals, benchmarks, cold starts, report, stop
 tests/     unit tests, no keys and no GPU needed
 docs/      deploying, and phone calls
 ```

@@ -39,7 +39,13 @@ class Shell(Protocol):
 class RealJob:
     def __init__(self, cmd: list[str], env: dict[str, str] | None, echo: bool):
         self.echo = echo
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env={**os.environ, **(env or {})})
+        self.proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env={**os.environ, "PYTHONUNBUFFERED": "1", **(env or {})},  # unbuffered, or lines show up minutes late
+        )
 
     def wait(self) -> tuple[int, str]:
         assert self.proc.stdout
@@ -126,6 +132,7 @@ def launch(shell: Shell, snapshot: bool = False, seed: bool = False, env_path: P
     require(code, "The API deploy")
     api_url = find_url(api_out, "nudge-api")
     if api_url:
+        set_env("API_URL", api_url.rstrip("/"), env_path)  # the simulated call reads it
         print(f"API: {api_url.rstrip('/')}  (the website's ENGINE_URL)", flush=True)
 
     n += 1

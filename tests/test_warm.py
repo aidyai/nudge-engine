@@ -1,25 +1,9 @@
-"""The warm-window script: the schedule it builds and the calls it makes, with Modal replaced by fakes."""
+"""The on/off script: the calls it makes, with Modal replaced by fakes."""
 
 import modal
 import pytest
 
 from deploy import warm
-
-
-def test_the_models_start_before_the_window_and_stop_when_it_closes():
-    assert warm.window_crons("08:00", "18:00") == ("45 7 * * 1-5", "0 18 * * 1-5")
-    assert warm.window_crons("09:30", "17:45", lead_minutes=30) == ("0 9 * * 1-5", "45 17 * * 1-5")
-
-
-def test_the_start_never_goes_before_midnight():
-    assert warm.window_crons("00:05", "12:00", lead_minutes=15)[0] == "0 0 * * 1-5"
-
-
-def test_the_schedule_comes_from_the_policy_file():
-    from engine.policy import load_policy
-
-    window = load_policy().calling_window
-    assert warm.window_crons(window.start, window.end) == (warm._on_cron, warm._off_cron)
 
 
 class Fake:
@@ -65,3 +49,11 @@ def test_the_app_names_match_what_the_deploy_files_create():
     assert warm.BRAIN[0] == llm.app.name and f"class {warm.BRAIN[1]}:" in inspect.getsource(llm)
     assert warm.VOICE[0] == tts.app.name and f"class {warm.VOICE[1]}:" in inspect.getsource(tts)
     assert "def speak(" in inspect.getsource(tts)
+
+
+def test_nothing_in_the_warm_script_runs_by_itself():
+    """Billing must only start when a person asks. No schedules, no timers."""
+    import inspect
+
+    source = inspect.getsource(warm)
+    assert "Cron" not in source and "schedule=" not in source and "Period" not in source

@@ -30,7 +30,7 @@ The first time, do it by hand. You see errors straight away, and it is faster. A
    uv run modal deploy deploy/api.py
    ```
    Open `https://<your-workspace>--nudge-api-web.modal.run/health`. It should answer `{"status":"ok"}`.
-   Run step 5's first command again whenever you change `.env`.
+   Run the first command again whenever you change `.env`.
 
 6. **Check it.** `uv run modal run evals/run.py` runs the eight scripted conversations. The first run waits while the brain wakes up.
 
@@ -78,26 +78,36 @@ A stopped brain costs nothing, and the price is the first request: the first col
 
 What this does not do: FP8 or other quantisation, a second region, or routing that keeps one caller on one replica. They are the next experiments, and each one would be a new line in the performance table.
 
-## Warm window (what makes cold starts a non-problem for scheduled calls)
+## Turning the models on and off by hand
 
 Modal's own tools for cold starts, and what we use:
 
 | Modal tool | What it does | Where we use it |
 |---|---|---|
-| `min_containers` | keeps N copies running, so nothing starts from cold | `deploy/warm.py`, only during calling hours |
+| `min_containers` | keeps N copies running, so nothing starts from cold | `deploy/warm.py::on` (by hand) |
 | `autoscaler.update` / `update_autoscaler` | changes those settings while running, without a redeploy | `deploy/warm.py` calls it |
-| scheduled functions (`modal.Cron`) | runs a function at set times | `deploy/warm.py` turns the models on 15 minutes before the window opens and off when it closes |
 | `scaledown_window` | how long an idle copy stays up (2 minutes for us; Modal allows up to 20) | `deploy/llm.py`, `deploy/tts.py` |
 | `buffer_containers` | spare idle copies for sudden bursts | not used: we run one GPU on purpose |
 | Volumes | weights and compile caches survive between starts | both models |
 | GPU memory snapshot (alpha) | saves the warmed-up process | `LLM_SNAPSHOT=1`, opt in, see above |
 
-Nudge's calls are scheduled, so we know when they start. `uv run modal deploy deploy/warm.py` deploys the schedule. It reads the calling window from `engine/policy.yaml`. By hand: `uv run modal run deploy/warm.py::on` and `::off`.
+`uv run modal run deploy/warm.py::on` keeps one brain and one voice awake. `::off` lets them sleep: the apps stay deployed and nothing is deleted, but billing stops about 2 minutes later. **Nothing runs on a timer.** There is no schedule anywhere in this project, so nothing can turn a GPU on without a person asking.
 
-The cost is the GPU price per hour times the hours of the window each day. Look up the price on modal.com/pricing. Redeploying `deploy/llm.py` or `deploy/tts.py` puts the settings back to zero, and the next scheduled start turns them on again.
+For real scheduled calls in production you would want the models awake before the calling window opens. That is a decision for when real calls start. Look up GPU prices on modal.com/pricing. Redeploying `deploy/llm.py` or `deploy/tts.py` puts the settings back to zero.
 
 ## One command
 
 `python -m scripts.launch` does the whole setup: secrets, voice, brain, API, wakes the models, checks them. Add `--snapshot` for the GPU snapshot brain (needs `LLM_PROXY_KEY` and `LLM_PROXY_SECRET` in `.env`) and `--seed` for the fake borrowers. The notebook has a cell that runs it.
 
+`uv run --env-file .env python -m scripts.simulate_call` plays a whole call with voice in and voice out: a pretend borrower speaks, Deepgram hears it, the agent answers, the voice speaks. It prints how long the borrower waits after each turn and saves the result for the report.
+
 `modal run evals/bench.py::cold --label snapshot --runs 5 --note snapshot` measures the cold start by itself: wait for sleep, wake, time, repeat. Results go into `docs/performance.md`.
+
+## What a slow cold start looked like (measured)
+
+| Start | Total | Weights loading | Mamba kernel warm-up |
+|---|---|---|---|
+| 1st (05:11 UTC, 17 Nov) | about 9 min | 23 s | 341 s |
+| 2nd (08:02 UTC, 17 Nov) | about 29 min | 1056 s (about 57 MB/s) | 471 s |
+
+Same code, same image. The difference was how fast the shared volume was read on that machine. The brain now copies the weights to the container's own disk, many files at once, before vLLM starts, and prints `[nudge] copied in N s`. Whether this fixes the slow reads is an experiment: compare that line across starts. Modal's start-up limit for the brain is 45 minutes, and every client waits for 45.

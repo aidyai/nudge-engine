@@ -66,6 +66,7 @@ def test_it_does_every_step_in_order_and_saves_the_urls(env_file):
     assert positions == sorted(positions)
     assert env["TTS_URL"] == "https://me--nudge-tts-chatterbox.modal.run"
     assert env["LLM_BASE_URL"] == "https://me--nudge-llm-server.modal.run/v1"
+    assert env["API_URL"] == "https://me--nudge-api-web.modal.run"
 
 
 def test_the_seed_step_only_runs_when_asked(env_file):
@@ -119,3 +120,8 @@ def test_the_secret_command_does_not_put_the_secret_in_the_command_line(env_file
 def test_find_url_ignores_trailing_punctuation():
     assert launch.find_url("see https://a--nudge-llm-x.modal.run.", "nudge-llm") == "https://a--nudge-llm-x.modal.run"
     assert launch.find_url("nothing here", "nudge-llm") is None
+
+
+def test_child_output_is_unbuffered_so_lines_appear_when_printed():
+    job = launch.RealJob(["python", "-c", "import os; print(os.environ['PYTHONUNBUFFERED'])"], None, echo=False)
+    assert job.wait() == (0, "1\n")

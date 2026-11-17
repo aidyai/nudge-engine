@@ -22,7 +22,7 @@ import httpx
 from engine.audio import TTS_SAMPLE_RATE, pcm_to_wav
 from engine.voices import KEYTERMS
 
-PATIENCE_S = 25 * 60  # a cold brain took 9 to 18 minutes to start (Modal's limit is 30)
+PATIENCE_S = 45 * 60  # a cold brain took 9, 18 and 29 minutes to start (Modal's limit for it is 45)
 SECRET_NAMES = ("DEEPGRAM_API_KEY", "MODELS_API_KEY", "HF_TOKEN", "DATABASE_URL", "API_KEY", "LLM_PROXY_KEY", "LLM_PROXY_SECRET")
 TEST_SENTENCE = "Hello, you owe twenty-five thousand naira, due on Tuesday."
 

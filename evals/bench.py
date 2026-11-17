@@ -202,7 +202,7 @@ async def bench_llm_async(
     requests = build_requests(tools_mode, model)
     started = time.perf_counter()  # the first request also wakes a stopped server: that is the cold start
     async with httpx.AsyncClient(timeout=1200, headers=extra_headers or {}) as client:
-        deadline = time.time() + 1200
+        deadline = time.time() + 2700
         while True:
             r = await one_request(client, url, key, requests[0])
             if r["ok"] or r["status"] not in (502, 503, 504) or time.time() > deadline:
@@ -229,7 +229,7 @@ async def first_answer_s(url: str, key: str, model: str, extra_headers: dict | N
     body = build_requests("per_state", model)[0]
     started = time.perf_counter()
     async with httpx.AsyncClient(timeout=1200, headers=extra_headers or {}) as client:
-        deadline = time.time() + 1500
+        deadline = time.time() + 2700
         while True:
             r = await one_request(client, url, key, body)
             if r["ok"]:
@@ -239,7 +239,7 @@ async def first_answer_s(url: str, key: str, model: str, extra_headers: dict | N
             await asyncio.sleep(5)
 
 
-@app.function(image=image, secrets=[modal.Secret.from_name("nudge-env")], timeout=30 * 60)
+@app.function(image=image, secrets=[modal.Secret.from_name("nudge-env")], timeout=50 * 60)
 def wake_once() -> float:
     from engine.config import Settings
 

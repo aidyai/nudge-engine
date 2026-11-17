@@ -59,3 +59,9 @@ def test_a_cold_only_report_is_not_empty(tmp_path, monkeypatch):
     (tmp_path / "x-cold.json").write_text(json.dumps({"meta": {"label": "x"}, "seconds": [10.0]}))
     text = report.main()
     assert "Cold starts" in text and "No results yet" not in text
+
+
+def test_the_call_table_shows_the_silence_a_borrower_hears():
+    turns = [{"stt_ms": 100, "brain_ms": 300, "tts_ms": 200}, {"stt_ms": 120, "brain_ms": 340, "tts_ms": 240}]
+    run = {"meta": {"label": "call"}, "outcome": "promise_captured", "turns": turns, "silence_ms": {"p50": 600, "p95": 700, "p99": 700}}
+    assert "| call | promise_captured | 2 | 600 ms | 700 ms | 700 ms | 110 / 320 / 220 ms |" in report.call_table([run])

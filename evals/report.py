@@ -93,8 +93,24 @@ def cold_table(runs: list[dict]) -> str:
     return "\n".join(rows)
 
 
+def mean_of(turns: list[dict], key: str) -> float | None:
+    return sum(t[key] for t in turns) / len(turns) if turns else None
+
+
+def call_table(runs: list[dict]) -> str:
+    """The simulated phone calls: what the borrower waits through after they stop speaking, turn by turn."""
+    rows = ["| run | outcome | turns | silence p50 | p95 | p99 | ears / brain / voice (mean) |", "|---|---|---|---|---|---|---|"]
+    for r in runs:
+        turns, s = r["turns"], r["silence_ms"]
+        rows.append(
+            f"| {r['meta']['label']} | {r['outcome']} | {len(turns)} | {f(s['p50'])} ms | {f(s['p95'])} ms | {f(s['p99'])} ms | "
+            f"{f(mean_of(turns, 'stt_ms'))} / {f(mean_of(turns, 'brain_ms'))} / {f(mean_of(turns, 'tts_ms'))} ms |"
+        )
+    return "\n".join(rows)
+
+
 def main(write: bool = False) -> str:
-    llm, tts, agent, cold = load("llm"), load("tts"), load("agent"), load("cold")
+    llm, tts, agent, cold, call = load("llm"), load("tts"), load("agent"), load("cold"), load("call")
     parts = [
         "# Performance",
         "",
@@ -132,6 +148,16 @@ def main(write: bool = False) -> str:
             agent_table(agent),
             "",
         ]
+    if call:
+        parts += [
+            "## Simulated phone call (voice in, voice out)",
+            "",
+            "A pretend borrower speaks, Deepgram hears it, the agent and brain answer, and the voice speaks. "
+            "Silence is what the borrower waits through: ears + brain + voice. The voice does not stream, so it is the whole sentence.",
+            "",
+            call_table(call),
+            "",
+        ]
     if cold:
         parts += [
             "## Cold starts (brain)",
@@ -141,7 +167,7 @@ def main(write: bool = False) -> str:
             cold_table(cold),
             "",
         ]
-    if not (llm or tts or agent or cold):
+    if not (llm or tts or agent or cold or call):
         parts += ["No results yet. Run the benchmarks first (see the top of `evals/bench.py`)."]
     text = "\n".join(parts) + "\n"
     if write:

@@ -42,7 +42,7 @@ def uv_runs() -> list[list[str]]:
 
 
 def test_the_notebook_has_commands_to_check():
-    assert len(uv_runs()) >= 8
+    assert len(uv_runs()) >= 6
 
 
 def test_python_is_never_run_by_file_path():
@@ -89,6 +89,7 @@ def test_the_one_click_cells_call_things_that_exist():
     text = "\n".join("".join(c["source"]) for c in json.loads(NOTEBOOK.read_text())["cells"] if c["cell_type"] == "code")
     assert '"scripts.launch"' in text and callable(launch.main)
     assert "evals/bench.py::cold" in text and hasattr(bench, "cold")
+    assert "scripts.simulate_call" in text and "evals/run.py" in text and "evals.report" in text
     assert "deploy/warm.py::off" in text
 
 

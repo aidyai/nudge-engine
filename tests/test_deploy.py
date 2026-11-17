@@ -128,7 +128,7 @@ def test_triton_kernels_stay_out_of_the_volume():
 
 
 def test_startup_may_take_longer_than_the_slowest_cold_start_we_saw():
-    assert int(llm.SERVER["startup_timeout"]) >= 30 * 60  # pyright: ignore[reportArgumentType]  # the 18 minute start was killed by a 20 minute limit
+    assert int(llm.SERVER["startup_timeout"]) >= 45 * 60  # pyright: ignore[reportArgumentType]  # starts took 9, 18 and 29 minutes
 
 
 def test_the_default_deploy_does_not_open_vllms_dev_endpoints(monkeypatch):
@@ -159,3 +159,57 @@ def test_one_replica_can_be_kept_warm_for_a_calling_window(monkeypatch):
         monkeypatch.delenv("LLM_MIN_CONTAINERS")
         importlib.reload(llm)
     assert llm.MIN_CONTAINERS == 0 and llm.SERVER["max_containers"] == 1  # never more than one GPU
+
+
+# ---- copying the weights to the container's own disk
+
+
+def make_cache(tmp_path, files=None, revision="abc123"):
+    repo = tmp_path / "hub" / "models--pipecat-ai--phonellm-mini-alpha-2"
+    snap = repo / "snapshots" / revision
+    snap.mkdir(parents=True)
+    (repo / "refs").mkdir()
+    (repo / "refs" / "main").write_text(revision)
+    blobs = repo / "blobs"
+    blobs.mkdir()
+    for name, data in (files or {"config.json": b"{}", "model-00001.safetensors": b"x" * 5000, "sub/tokenizer.json": b"t"}).items():
+        (blobs / name.replace("/", "_")).write_bytes(data)
+        (snap / name).parent.mkdir(parents=True, exist_ok=True)
+        (snap / name).symlink_to(blobs / name.replace("/", "_"))  # the real cache links to blobs, like this
+    return tmp_path / "hub"
+
+
+def test_the_weights_are_copied_as_real_files_with_the_same_layout(tmp_path):
+    root = make_cache(tmp_path)
+    said = []
+    out = llm.copy_weights(root, tmp_path / "local", say=said.append)
+    assert out is not None and out == tmp_path / "local"
+    assert (out / "model-00001.safetensors").read_bytes() == b"x" * 5000
+    assert (out / "sub" / "tokenizer.json").read_bytes() == b"t"
+    assert not (out / "config.json").is_symlink()
+    assert any("copied in" in line for line in said)
+
+
+def test_a_pinned_revision_picks_its_own_folder(tmp_path):
+    root = make_cache(tmp_path, revision="old1")
+    found = llm.find_snapshot(root, revision="old1")
+    assert found is not None and found.name == "old1"
+
+
+def test_with_nothing_downloaded_yet_it_falls_back_to_the_normal_start(tmp_path):
+    said = []
+    assert llm.copy_weights(tmp_path, tmp_path / "local", say=said.append) is None
+    assert any("download" in line for line in said)
+
+
+def test_it_does_not_copy_when_the_local_disk_is_too_small(tmp_path, monkeypatch):
+    root = make_cache(tmp_path)
+    monkeypatch.setattr(llm.shutil, "disk_usage", lambda _: type("D", (), {"free": 10})())
+    assert llm.copy_weights(root, tmp_path / "local", say=lambda _: None) is None
+
+
+def test_a_local_folder_is_served_without_a_revision():
+    cmd = llm.build_vllm_command("k", revision="abc", model="/tmp/phonellm")
+    assert cmd[2] == "/tmp/phonellm" and "--revision" not in cmd
+    assert "--served-model-name" in cmd and llm.SERVED_NAME in cmd  # clients still ask for the same name
+    assert "--revision" in llm.build_vllm_command("k", revision="abc")

@@ -35,10 +35,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import modal
 
@@ -77,12 +80,61 @@ vllm_cache = modal.Volume.from_name("vllm-cache", create_if_missing=True)
 app = modal.App("nudge-llm")
 
 
-def build_vllm_command(api_key: str, revision: str | None = None, sleep_mode: bool = False) -> list[str]:
+HF_ROOT = Path(os.environ.get("HF_HUB_CACHE", "/root/.cache/huggingface"))
+LOCAL_MODEL = Path("/tmp/phonellm")  # the container's own disk, fast, thrown away when it stops
+
+
+def find_snapshot(root: Path, model: str = MODEL, revision: str | None = None) -> Path | None:
+    """Where Hugging Face's cache keeps the files of one model version, or None if it has not been downloaded yet."""
+    repo = root / ("models--" + model.replace("/", "--"))
+    for name in [revision] if revision else []:
+        if name and (repo / "snapshots" / name).is_dir():
+            return repo / "snapshots" / name
+    ref = repo / "refs" / (revision or "main")
+    if ref.is_file() and (repo / "snapshots" / ref.read_text().strip()).is_dir():
+        return repo / "snapshots" / ref.read_text().strip()
+    found = sorted((repo / "snapshots").glob("*"), key=lambda p: p.stat().st_mtime) if (repo / "snapshots").is_dir() else []
+    return found[-1] if found else None
+
+
+def copy_weights(root: Path = HF_ROOT, dest: Path = LOCAL_MODEL, revision: str | None = None, workers: int = 16, say=print) -> Path | None:
+    """Copy the model files from the shared volume to the container's own disk, many files at once.
+
+    A cold start read the 59 GB straight from the volume: 23 seconds on one machine and 17 minutes on another
+    (about 57 MB/s). Reading whole files in parallel is the cheap way to find out if the slow reads were the
+    volume's random access. Returns the folder to serve, or None to serve from the volume as before.
+    """
+    source = find_snapshot(root, revision=revision)
+    if source is None:
+        say("[nudge] no downloaded weights yet: vLLM will download them (the next start will copy them)")
+        return None
+    files = [p for p in source.rglob("*") if p.is_file()]
+    size = sum(p.stat().st_size for p in files)
+    dest.mkdir(parents=True, exist_ok=True)
+    if shutil.disk_usage(dest).free < size * 1.2:
+        say("[nudge] not enough local disk to copy the weights: serving from the volume")
+        return None
+
+    def copy(path: Path) -> None:
+        target = dest / path.relative_to(source)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(path, target)  # follows the cache's links to the real file
+
+    started = time.time()
+    say(f"[nudge] copying {size / 1e9:.1f} GB of weights to local disk, {workers} files at a time")
+    with ThreadPoolExecutor(workers) as pool:
+        list(pool.map(copy, files))
+    seconds = time.time() - started
+    say(f"[nudge] copied in {seconds:.0f} s ({size / 1e6 / max(seconds, 0.001):.0f} MB/s)")
+    return dest
+
+
+def build_vllm_command(api_key: str, revision: str | None = None, sleep_mode: bool = False, model: str = MODEL) -> list[str]:
     """The `vllm serve` command. A plain function so a test can check the flags."""
     cmd = [
         "vllm",
         "serve",
-        MODEL,
+        model,
         "--served-model-name",
         SERVED_NAME,
         "--host",
@@ -110,14 +162,14 @@ def build_vllm_command(api_key: str, revision: str | None = None, sleep_mode: bo
         "--tool-call-parser",
         "qwen3_coder",
     ]
-    if revision:
+    if revision and model == MODEL:  # a local folder has no revisions
         cmd += ["--revision", revision]
     if sleep_mode:
         cmd += ["--enable-sleep-mode"]  # lets us park the engine before Modal takes the snapshot
     return cmd
 
 
-def wait_until_healthy(process: subprocess.Popen, timeout: float = 30 * MINUTES) -> None:
+def wait_until_healthy(process: subprocess.Popen, timeout: float = 45 * MINUTES) -> None:
     """Block until vLLM answers /health. Fail loudly if it crashes instead of hanging."""
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -158,7 +210,7 @@ SERVER = dict(
     volumes={"/root/.cache/huggingface": hf_cache, "/root/.cache/vllm": vllm_cache},
     secrets=[modal.Secret.from_name("huggingface-secret"), modal.Secret.from_name("nudge-models")],
     port=PORT,
-    startup_timeout=30 * MINUTES,  # a cold start took 9 to 18 minutes in testing; Modal kills the container at this limit
+    startup_timeout=45 * MINUTES,  # cold starts took 9, 18 and 29 minutes in testing; Modal kills the container at this limit
     scaledown_window=2 * MINUTES,  # stay up this long after the last request, then stop paying
     min_containers=MIN_CONTAINERS,  # 0: nothing runs (or costs) while idle. Set LLM_MIN_CONTAINERS=1 for a calling window.
     max_containers=1,  # a runaway client can never start a second GPU
@@ -184,15 +236,21 @@ if SNAPSHOT:
         @modal.enter(snap=True)
         def start(self):
             key = os.environ["MODELS_API_KEY"]
-            self.process = subprocess.Popen(build_vllm_command(key, MODEL_REVISION, sleep_mode=True))
+            model = str(copy_weights(revision=MODEL_REVISION) or MODEL)
+            self.process = subprocess.Popen(build_vllm_command(key, MODEL_REVISION, sleep_mode=True, model=model))
             wait_until_healthy(self.process)
+            print("[nudge] snapshot step 1/3: vLLM is healthy", flush=True)
             warm_up(key)
+            print("[nudge] snapshot step 2/3: warm-up requests done", flush=True)
             call_vllm("/sleep?level=1", key)  # weights move to CPU memory, the GPU is emptied, then Modal snapshots
+            print("[nudge] snapshot step 3/3: vLLM is asleep, Modal takes the snapshot now", flush=True)
 
         @modal.enter(snap=False)
         def wake(self):
+            print("[nudge] restored from the snapshot, waking vLLM", flush=True)
             call_vllm("/wake_up", os.environ["MODELS_API_KEY"])
             wait_until_healthy(self.process)
+            print("[nudge] awake and healthy", flush=True)
 
         @modal.exit()
         def stop(self):
@@ -205,8 +263,10 @@ else:
     class Server:
         @modal.enter()
         def start(self):
-            self.process = subprocess.Popen(build_vllm_command(os.environ["MODELS_API_KEY"], MODEL_REVISION))
+            model = str(copy_weights(revision=MODEL_REVISION) or MODEL)
+            self.process = subprocess.Popen(build_vllm_command(os.environ["MODELS_API_KEY"], MODEL_REVISION, model=model))
             wait_until_healthy(self.process)
+            print("[nudge] vLLM is healthy", flush=True)
 
         @modal.exit()
         def stop(self):
