@@ -1,13 +1,8 @@
-"""The engine API on Modal: the website's calls, speech, and phone calls, in one app.
+"""The engine API on Modal. Needs the secret `nudge-env` (from your .env).
 
-Needs the Modal secret `nudge-env`, made from your .env:
-    uv run modal secret create nudge-env --from-dotenv .env --force
-Deploy:   uv run modal deploy deploy/api.py
-Logs:     uv run modal app logs nudge-api -f
-URL:      https://<your-workspace>--nudge-api-web.modal.run   (open /health to check)
+    uv run modal deploy deploy/api.py
 
-One container only, because call state lives in its memory. It scales to zero, so nothing costs money
-while nobody is using it, and a call left idle for ten minutes is forgotten. A call can last 15 minutes.
+One container, because call state lives in memory. Scales to zero.
 """
 
 from importlib.metadata import version

@@ -81,6 +81,12 @@ uv run python -m evals.report --write      # builds docs/performance.md
 
 The brain benchmark replays the five requests of a real call (real prompt, real tools) with 1, 4, 8 and 16 calls at once, and reports time to first token (P50/P95/P99, goal under 700 ms), tokens per second, requests per second, the prefix-cache hit rate, the cost per 1,000 requests, and the cold start. `--tools fixed` sends all eight tools on every request, so you can show what the per-state tool lists buy. Chatterbox cannot stream, so the voice benchmark times whole sentences and reports the real-time factor.
 
+What we measured so far (one RTX PRO 6000 for the brain, one L4 for the voice):
+
+- The brain answers its first token in 83 ms with one call, 308 ms with sixteen at once. The goal was 700 ms.
+- The voice is the slow part. It speaks a whole sentence at a time, so a caller waits about 4 to 7 seconds per turn.
+- A sleeping brain takes 9 to 29 minutes to wake. Most of it is compiling kernels, so it is best kept awake during a call.
+
 The numbers are in `docs/performance.md`, made by the command above from the files in `evals/results/`. Nothing is typed by hand. If that file says "No results yet", the benchmarks have not been run.
 
 ## Phone calls

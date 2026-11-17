@@ -1,14 +1,5 @@
-"""The engine's web API. The website talks to this, and Twilio talks to the phone routes.
+"""The web API: the website's calls, speech, and phone routes. Everything but /health needs X-API-Key.
 
-    GET  /health
-    POST /calls                 start a demo call. The agent speaks first.
-    POST /calls/{id}/turns      the caller said something. Get the agent's reply.
-    POST /speech/transcribe     audio in, text out (Deepgram)
-    POST /speech/say            text in, a wav out (our voice)
-    POST /phone/calls           ring a phone number (see phone.py)
-    WS   /phone/stream          where Twilio sends the call audio (see phone.py)
-
-Everything except /health and the websocket needs the X-API-Key header.
 Call state lives in memory, so this runs as one container.
 """
 

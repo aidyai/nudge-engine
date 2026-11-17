@@ -1,10 +1,6 @@
-"""Check that every outside service answers to your keys. Prints OK, SKIP or FAIL, never a secret.
+"""Check every outside service answers to your keys. Prints OK, SKIP or FAIL, never a secret.
 
-    uv run --env-file .env python -m scripts.check_services
-
-SKIP means "not set up yet" (for example the LLM server before you deploy it). FAIL means something
-is set up but does not work. The speech round trip speaks a sentence with your TTS server and sends
-the audio to Deepgram, so it proves both ends of the voice work with real services.
+uv run --env-file .env python -m scripts.check_services
 """
 
 from __future__ import annotations
@@ -46,9 +42,7 @@ def similarity(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, words(a), words(b)).ratio()
 
 
-# ------------------------------------------------------------------ the checks
-
-
+# the checks
 def check_deepgram() -> str:
     _need("DEEPGRAM_API_KEY")
     r = httpx.get(

@@ -106,7 +106,7 @@ def test_idle_cost_rules_are_stated_in_the_files():
         source = open(path).read()
         assert "max_containers=1" in source
         assert "scaledown_window=2 * MINUTES" in source
-    assert "min_containers=0" in open("deploy/llm.py").read()
+    assert llm.SERVER["min_containers"] == 0  # nothing runs while idle, unless LLM_MIN_CONTAINERS is set
 
 
 def test_voice_weights_are_cached_and_the_model_is_warmed_up():

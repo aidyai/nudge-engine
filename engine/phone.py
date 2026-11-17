@@ -1,9 +1,6 @@
-"""Phone calls. Twilio rings a number, streams the call's audio to us, and the agent does the talking.
+"""Phone calls: Twilio rings a number and streams the audio here, and the same agent does the talking.
 
-    POST /phone/calls   (needs the API key)  Twilio rings the number you give. Only numbers on ALLOWED_NUMBERS are accepted.
-    WS   /phone/stream                       Twilio connects here once someone answers. Ears, agent and voice run the call.
-
-The agent is the same one the website uses. Here it sits in the pipeline where an LLM normally sits.
+Only numbers in ALLOWED_NUMBERS can be called.
 """
 
 import asyncio

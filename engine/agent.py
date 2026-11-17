@@ -1,14 +1,4 @@
-"""The agent, in one file. Read it top to bottom.
-
-A call is a conversation where the model can only act through a few tools, and the tools it can see
-depend on the state of the call. The model chats and picks tools. Everything that matters (who may see
-what, what may be saved, what may be said) is decided by plain code here and in policy.py and
-output_check.py, never by the prompt alone.
-
-    call = start_call(db, "B001")
-    print(greet(call, db, chat))                # the agent speaks first
-    print(turn(call, db, "Hello?", chat))       # one borrower sentence in, one agent reply out
-"""
+"""The agent in one file: six call states, each showing the model only its tools. Code decides, the model talks."""
 
 import hashlib
 import json
@@ -31,7 +21,7 @@ LAGOS = ZoneInfo(CFG.calling_window.timezone)
 SAFE_LINE = "Sorry, I am having trouble. A colleague will call you back. Goodbye."
 MAX_STEPS = 6  # model calls allowed for one borrower sentence
 
-# ---------------------------------------------------------------- the six states
+# the six states
 # Each state shows the model only these tools. Code moves the call from state to state.
 STATES = {
     "verify": ["verify_identity", "opt_out", "hand_off", "end_call"],
@@ -128,9 +118,8 @@ TOOLS = {
     ]
 }
 
-# ---------------------------------------------------------------- the state of one call
 
-
+# the state of one call
 @dataclass
 class Call:
     id: str
@@ -173,9 +162,7 @@ def start_call(db, borrower_id, today=None, check_dialing=True, now=None):
     return call
 
 
-# ---------------------------------------------------------------- reading what the caller said
-
-
+# reading what the caller said
 def parse_day_month(text):
     """'14 March', 'the fourteenth of March', 'March 14th', '14/03' -> '14-03'. None if unclear."""
     t = re.sub(r"[-,]", " ", text.lower())
@@ -209,9 +196,8 @@ TRIGGERS = [  # words that mean the same thing in any state. Code acts at once, 
     ),
 ]
 
-# ---------------------------------------------------------------- the tools. Each one returns a small dict.
 
-
+# the tools. Each one returns a small dict.
 def t_verify_identity(call, db, answer):
     if parse_day_month(answer) == call.borrower["birth_day_month"]:
         call.verified, call.state = True, "explain"
@@ -281,6 +267,8 @@ def t_propose_option(call, db, option, amount_ngn=None, date=None):
         on = datetime.strptime(date, "%Y-%m-%d").date() if date else None
     except (ValueError, ArithmeticError):
         return {"error": "amount must be a number and date must be YYYY-MM-DD"}
+    if option == "pay_now" and on:  # a date means they will pay later, so it is a promise, not "now"
+        option = "promise"
     if option in ("pay_now", "promise") and amount is None:
         amount = call.offers.pay_now_ngn  # the full amount unless the caller named another
     verdict = policy.validate_option(option, amount, on, call.offers)
@@ -365,9 +353,7 @@ def run_tool(call, db, name, args):
     return result
 
 
-# ---------------------------------------------------------------- the conversation loop
-
-
+# the conversation loop
 def turn(call, db, user_text, chat):
     """One borrower sentence in, one agent reply out. `chat(messages, tools)` is the model."""
     lender.log_event(db, call.id, "user", {"text": user_text})
@@ -429,6 +415,9 @@ def respond(call, db, chat):
         if call.readback and norm(call.readback) in norm(reply):
             call.readback = ""
         lender.log_event(db, call.id, "agent", {"text": reply})
+        if call.state in ("close", "handoff"):  # the last thing is said, so code ends the call; the model need not
+            call.done = True
+            lender.end_call(db, call.id, call.outcome or "technical_failure")
         return reply
     if call.state != "handoff":
         run_tool(

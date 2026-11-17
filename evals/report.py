@@ -26,7 +26,7 @@ def load(kind: str) -> list[dict]:
 
 
 def llm_table(runs: list[dict]) -> str:
-    rows = ["| run | tools | calls at once | TTFT p50 | p95 | p99 | tokens/s | requests/s | cache hit | $ per 1k requests |",
+    rows = ["| run | tools | calls at once | TTFT p50 | p95 | p99 | tokens/s | requests/s | cache hit | USD per 1k requests |",
             "|---|---|---|---|---|---|---|---|---|---|"]  # fmt: skip
     for run in runs:
         m = run["meta"]
@@ -36,13 +36,13 @@ def llm_table(runs: list[dict]) -> str:
             rows.append(
                 f"| {m['label']} ({m['gpu']}) | {m.get('tools', '')} | {lv['concurrency']} | {f(t['p50'])} ms | {f(t['p95'])} ms | "
                 f"{f(t['p99'])} ms | {f(lv['tokens_per_s']['p50'])} | {f(lv['requests_per_s'], 1)} | {hit} | "
-                f"${f(lv['usd_per_1k_requests'], 3)} |"
+                f"{f(lv['usd_per_1k_requests'], 3)} |"
             )
     return "\n".join(rows)
 
 
 def tts_table(runs: list[dict]) -> str:
-    rows = ["| run | at once | latency p50 | p95 | p99 | short / medium / long (p50) | real-time factor p50 | $ per 1k sentences |",
+    rows = ["| run | at once | latency p50 | p95 | p99 | short / medium / long (p50) | real-time factor p50 | USD per 1k sentences |",
             "|---|---|---|---|---|---|---|---|"]  # fmt: skip
     for run in runs:
         m = run["meta"]
@@ -51,7 +51,7 @@ def tts_table(runs: list[dict]) -> str:
             rows.append(
                 f"| {m['label']} ({m['gpu']}) | {lv['concurrency']} | {f(t['p50'])} ms | {f(t['p95'])} ms | {f(t['p99'])} ms | "
                 f"{f(b['short'])} / {f(b['medium'])} / {f(b['long'])} ms | {f(lv['real_time_factor']['p50'], 2)} | "
-                f"${f(lv['usd_per_1k_requests'], 3)} |"
+                f"{f(lv['usd_per_1k_requests'], 3)} |"
             )
     return "\n".join(rows)
 
@@ -72,11 +72,13 @@ def agent_table(runs: list[dict]) -> str:
 
 
 def cold_lines(runs: list[dict], what: str) -> str:
-    return "\n".join(
-        f"- {what} `{r['meta']['label']}`{' (' + r['meta']['note'] + ')' if r['meta'].get('note') else ''}: "
-        f"first request answered after {r['first_request_s']:.0f} s ({r['meta']['date']})"
-        for r in runs
-    )
+    lines = []
+    for r in runs:
+        s = r["first_request_s"]
+        result = f"first request answered after {s:.0f} s" if s >= 10 else f"already awake ({s:.0f} s), so this is not a cold start"
+        note = f" ({r['meta']['note']})" if r["meta"].get("note") else ""
+        lines.append(f"- {what} `{r['meta']['label']}`{note}: {result} ({r['meta']['date']})")
+    return "\n".join(lines)
 
 
 def cold_table(runs: list[dict]) -> str:

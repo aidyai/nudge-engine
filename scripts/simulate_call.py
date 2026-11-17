@@ -1,15 +1,9 @@
-"""A phone call without the phone: a pretend borrower speaks, the engine hears it, thinks, and answers out loud.
+"""A phone call without the phone: a pretend borrower speaks, the engine hears it and answers out loud.
 
     uv run --env-file .env python -m scripts.simulate_call --label call
 
-Every turn goes through the real services, the same ones a phone call uses:
-    borrower line -> voice (Chatterbox) -> audio -> ears (Deepgram) -> text -> brain (agent + PhoneLLM) -> reply -> voice
-
-The borrower's audio is made with the same voice model, so the borrower's side is clean studio speech. A real phone
-line is noisier. The numbers below are what the borrower waits through after they stop speaking:
-    ears + brain + voice = the silence on the line.
-It prints the conversation and those timings, saves them to evals/results/<label>-call.json, and writes the agent's side
-of the call to simulated_call.wav so you can listen to it.
+borrower voice -> ears (Deepgram) -> brain -> voice. Silence = ears + brain + voice, saved to evals/results/.
+The agent's side is written to simulated_call.wav.
 """
 
 from __future__ import annotations
@@ -27,7 +21,13 @@ import httpx
 
 from evals.stats import summarize
 
-LINES = ["Yes, speaking.", "{dob}", "I can pay on Friday.", "Yes, that is right."]  # the happy path, as a borrower would say it
+LINES = [
+    "Yes, speaking.",
+    "{dob}",
+    "I can pay on Friday.",
+    "Yes, that is right.",
+    "Thank you.",
+]  # the happy path, as a borrower would say it
 MONTHS = "January February March April May June July August September October November December".split()
 RESULTS = Path(__file__).resolve().parent.parent / "evals" / "results"
 DEMO_ARCHETYPE = "cooperative_due_3d"  # the borrower the API's demo call rings

@@ -175,6 +175,20 @@ def test_pay_now_sends_a_payment_link_from_code(db):
     assert count(db, "select count(*) from nudge.events where type = 'payment_link_sent'") == 1
 
 
+def test_pay_now_with_a_date_is_a_promise(db):
+    call = verified(db)
+    friday = (TODAY + timedelta(days=4)).isoformat()
+    run_tool(call, db, "propose_option", {"option": "pay_now", "date": friday})
+    assert call.pending["option"] == "promise" and "now" not in call.readback  # type: ignore[index]
+
+
+def test_the_call_ends_by_itself_after_the_closing_words(db):
+    call = start(db)
+    call.state, call.outcome = "close", "verification_failed"
+    turn(call, db, "ok", Script(say("Sorry, I could not confirm who you are. Goodbye.")))
+    assert call.done and count(db, "select outcome from nudge.calls where id = cast(:i as uuid)", i=call.id) == "verification_failed"
+
+
 def test_a_no_saves_nothing_and_goes_back_to_choosing(db):
     call = verified(db)
     run_tool(call, db, "propose_option", {"option": "pay_now"})

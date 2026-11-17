@@ -55,11 +55,7 @@ def pcm_from_reply(response: httpx.Response) -> bytes:
 
 
 class ChatterboxTTSService(TTSService):
-    """Pipecat text-to-speech that calls the Chatterbox endpoint from deploy/tts.py.
-
-    Pipecat hands us one sentence at a time. Each sentence is one request, and the audio for that
-    sentence comes back whole. If the latency report says this is too slow, streaming comes next.
-    """
+    """Pipecat text-to-speech that calls the Chatterbox endpoint from deploy/tts.py."""
 
     Settings = TTSSettings
     _settings: Settings

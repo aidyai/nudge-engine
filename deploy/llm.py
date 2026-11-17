@@ -1,34 +1,8 @@
-"""PhoneLLM Mini on vLLM, served by Modal as an OpenAI-compatible API.
+"""PhoneLLM Mini on vLLM, served by Modal as an OpenAI-style API.
 
-One-time setup (replace the values):
-    uv run modal secret create huggingface-secret HF_TOKEN=hf_xxx
-    uv run modal secret create nudge-models MODELS_API_KEY=<a long random string>
-
-Deploy:
     uv run modal deploy deploy/llm.py
 
-Logs (request lines and throughput stats, never prompts or replies):
-    uv run modal app logs nudge-llm        # last 100 lines
-    uv run modal app logs nudge-llm -f     # follow live
-
-Cold start options (all measured by evals/bench.py, see docs/performance.md):
-  - caches always on: weights, vLLM's torch.compile cache and FlashInfer's autotune cache live in Volumes.
-    Triton kernels are NOT moved there: we tried (TRITON_CACHE_DIR in the volume) and the next cold start went
-    from about 9 minutes to over 18, with "Cubin file saved by TritonBundler not found" errors. See docs/deploy.md.
-  - LLM_SNAPSHOT=1 at deploy time: Modal's GPU memory snapshot (alpha). vLLM starts once, warms up, goes to
-    sleep, and Modal saves the process. Later cold starts restore it instead of redoing the warm-up.
-        LLM_SNAPSHOT=1 uv run modal deploy deploy/llm.py
-  - LLM_MIN_CONTAINERS=1: keep one replica warm for a calling window (it bills while up).
-
-Cost rules built in: nothing runs while idle (min_containers=0), a container stops 2 minutes after
-its last request, and at most one container can ever run (max_containers=1).
-
-Modal prints a URL like https://<workspace>--nudge-llm-server.us-east.modal.direct
-Put that URL plus /v1 in .env as LLM_BASE_URL, and the same random string as MODELS_API_KEY.
-
-The vLLM flags below are the recipe from the model card of pipecat-ai/phonellm-mini-alpha-2.
-Two things the card says not to do, and we do not do: --enforce-eager (CUDA graphs make decoding
-5 to 7 times faster) and --reasoning-parser (the model runs with thinking off).
+Idle costs nothing and it sleeps 2 minutes after the last request. Details: docs/deploy.md.
 """
 
 from __future__ import annotations
@@ -98,12 +72,7 @@ def find_snapshot(root: Path, model: str = MODEL, revision: str | None = None) -
 
 
 def copy_weights(root: Path = HF_ROOT, dest: Path = LOCAL_MODEL, revision: str | None = None, workers: int = 16, say=print) -> Path | None:
-    """Copy the model files from the shared volume to the container's own disk, many files at once.
-
-    A cold start read the 59 GB straight from the volume: 23 seconds on one machine and 17 minutes on another
-    (about 57 MB/s). Reading whole files in parallel is the cheap way to find out if the slow reads were the
-    volume's random access. Returns the folder to serve, or None to serve from the volume as before.
-    """
+    """Copy the model files from the shared volume to the container's own disk, many files at once."""
     source = find_snapshot(root, revision=revision)
     if source is None:
         say("[nudge] no downloaded weights yet: vLLM will download them (the next start will copy them)")

@@ -18,7 +18,7 @@ META = {
 
 def test_the_brain_table_shows_percentiles_and_cost():
     table = report.llm_table([{"meta": META, "levels": [LEVEL]}])
-    assert "| rtx6000-bf16 (RTX-PRO-6000) | per_state | 4 | 120 ms | 240 ms | 300 ms | 55 | 12.5 | 90% | $0.123 |" in table
+    assert "| rtx6000-bf16 (RTX-PRO-6000) | per_state | 4 | 120 ms | 240 ms | 300 ms | 55 | 12.5 | 90% | 0.123 |" in table
 
 
 def test_a_missing_number_is_a_dash_not_a_crash():
@@ -44,6 +44,11 @@ def test_cold_start_lines_show_what_was_different():
     lines = report.cold_lines(runs, "Cold start").splitlines()
     assert lines[0] == "- Cold start `plain`: first request answered after 612 s (d1)"
     assert lines[1] == "- Cold start `snap` (gpu snapshot): first request answered after 48 s (d2)"
+
+
+def test_a_warm_server_is_not_called_a_cold_start():
+    line = report.cold_lines([{"meta": {"label": "l4", "date": "d"}, "first_request_s": 2.0}], "Cold start")
+    assert "already awake" in line and "answered after" not in line
 
 
 def test_the_cold_table_lists_every_wake_up_and_the_middle_one():

@@ -1,11 +1,8 @@
-"""Do the whole setup in one go: secrets, deploy voice + brain + API, wake the models, check everything.
+"""Set everything up in one go: secrets, deploy, wake the models, check them.
 
-    python -m scripts.launch                 # normal brain
-    python -m scripts.launch --snapshot      # brain with Modal's GPU memory snapshot (needs LLM_PROXY_KEY/SECRET in .env)
-    python -m scripts.launch --seed          # also create the tables and the 45 fake borrowers
+    python -m scripts.launch [--snapshot] [--seed]
 
-It only calls the same commands the notebook steps call, one after the other. Each step prints a line, so you can see
-where it is. It stops at the first step that fails and says which one.
+Stops at the first step that fails and says which one.
 """
 
 from __future__ import annotations

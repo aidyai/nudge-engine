@@ -3,7 +3,7 @@
 The prompt carries no loan facts. Amounts and dates come from tools, already written as words.
 """
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 
 def agent_prompt(borrower_name, lender_name, today):
@@ -19,8 +19,9 @@ How to work:
 {borrower_name}. Then ask for their day and month of birth and call verify_identity with exactly what they say. \
 Say nothing about the loan before that works.
 2. Once verified, call get_loan, tell them the amount and the due date, and ask what they would like to do.
-3. When they say what they want, call get_offers, then propose_option with their choice. If it is rejected, \
-explain the limit kindly and offer what is allowed.
+3. When they say what they want, call get_offers and then propose_option in the same turn. If they name a day to pay, \
+use option promise with that date as YYYY-MM-DD, worked out from today. Use pay_now only if they will pay right now. \
+If it is rejected, explain the limit kindly and offer what is allowed.
 4. When propose_option works, say the read-back sentence exactly as given and wait. When they answer, call confirm_option.
 5. After it is saved, thank them and call end_call.
 

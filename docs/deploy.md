@@ -70,7 +70,7 @@ The first request after a quiet spell is slow because the brain has to start.
 A stopped brain costs nothing, and the price is the first request: the first cold start took about 10 minutes (about 2 minutes downloading 59 GB of weights, about 8 minutes compiling and warming up). Everything below is measured by `evals/bench.py`, so the claims in `docs/performance.md` come from runs, not from this page.
 
 - **Caches (always on).** The weights, vLLM's `torch.compile` cache and FlashInfer's autotune cache live in Modal Volumes. Measured on the RTX PRO 6000: the first cold start took 507 s to start the engine (about 380 s of that is warming up Mamba2 Triton kernels), the second 542 s. The caches save the 2 minute download and about 8 s of compile, not the warm-up.
-- **What we tried and removed.** Putting Triton's kernel cache (`TRITON_CACHE_DIR`) in the volume. The next cold start printed `Cubin file saved by TritonBundler not found` errors and took 1,097 s instead of about 520 s, and Modal killed it at the old 20 minute startup limit. It stays out. The startup limit is now 30 minutes.
+- **What we tried and removed.** Putting Triton's kernel cache (`TRITON_CACHE_DIR`) in the volume. The next cold start printed `Cubin file saved by TritonBundler not found` errors and took 1,097 s instead of about 520 s, and Modal killed it at the old 20 minute startup limit. It stays out. The startup limit is now 45 minutes.
 - **GPU snapshot (opt in).** `LLM_SNAPSHOT=1 uv run modal deploy deploy/llm.py`. vLLM starts once, warms up, goes to sleep, and Modal snapshots the process, so later cold starts restore it instead of redoing the roughly 6 minute warm-up. It is an alpha Modal feature, the first starts after a deploy build the snapshot (Modal says it takes a handful, usually under five, before it pays off), and a redeploy throws old snapshots away.
   **Security.** Snapshot mode needs `VLLM_SERVER_DEV_MODE=1`. vLLM's security page says never to use it in production: its dev endpoints have no API-key check, and one of them (`/collective_rpc`) runs arbitrary methods on the engine. So in snapshot mode the brain is deployed with `unauthenticated=False`: Modal's proxy rejects any request without a proxy token (401) before vLLM sees it. Make a token at https://modal.com/settings/proxy-auth-tokens and put its two halves in `.env` as `LLM_PROXY_KEY` (`wk-...`) and `LLM_PROXY_SECRET` (`ws-...`). The engine, the evals and the benchmark send them as `Modal-Key` and `Modal-Secret` headers. A test checks that the default deploy has no dev endpoints and that snapshot mode is never public.
 - **A warm replica for a calling window.** `LLM_MIN_CONTAINERS=1 uv run modal deploy deploy/llm.py`. It bills while it is up, so set it back to 0 afterwards.
@@ -111,3 +111,12 @@ For real scheduled calls in production you would want the models awake before th
 | 2nd (08:02 UTC, 17 Nov) | about 29 min | 1056 s (about 57 MB/s) | 471 s |
 
 Same code, same image. The difference was how fast the shared volume was read on that machine. The brain now copies the weights to the container's own disk, many files at once, before vLLM starts, and prints `[nudge] copied in N s`. Whether this fixes the slow reads is an experiment: compare that line across starts. Modal's start-up limit for the brain is 45 minutes, and every client waits for 45.
+
+## A cloned voice (optional)
+
+About 10 seconds of clear speech from someone who agreed:
+
+```
+uv run modal volume create nudge-voices
+uv run modal volume put nudge-voices ./voice.wav /voice.wav
+```

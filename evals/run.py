@@ -1,21 +1,9 @@
-"""Evals. Scripted borrowers talk to your real model and your real database, and we check the rules held.
+"""Evals: scripted borrowers talk to the real model, and plain code checks what happened.
 
-One-time setup (from the repo root, with .env filled in):
-    uv run --env-file .env python -m engine.seed --init-schema      # tables + fake borrowers in your database
-    uv run modal secret create nudge-env --from-dotenv .env --force     # your settings, for Modal
-
-Run (it all executes on Modal):
     uv run modal run evals/run.py                              # every scenario, once
-    uv run modal run evals/run.py --only happy                 # one scenario
-    uv run modal run evals/run.py --runs 5 --label baseline    # 5 runs each, saved to evals/results/
+    uv run modal run evals/run.py --runs 5 --label baseline    # five runs each, saved to evals/results/
 
-Two scores, kept apart. Rules are what must never break (no digits spoken, nothing about the loan before
-verification, at most one promise). Task is whether the call reached the right outcome using the right tools.
-A rule broken is a failed run (exit code 1). A missed task is a number to improve.
-The method comes from kwindla/aiewf-eval (scripted conversations, per-turn tool checks, latency percentiles),
-with plain checks instead of an LLM judge, so a result is the same every time it is read.
-
-It reseeds the database first, so every run starts clean. The first run waits while the model wakes up.
+Rules (never break) and task (did the job) are scored apart. It reseeds the database before each run.
 """
 
 import json
@@ -41,7 +29,7 @@ SCENARIOS = {
         archetype="cooperative_due_3d",
         outcome="promise_captured",
         use=["verify_identity", "get_loan", "propose_option", "confirm_option"],
-        lines=["Yes, speaking.", "{dob}", "I can pay on Friday.", "Yes, that is right."],
+        lines=["Yes, speaking.", "{dob}", "I can pay on Friday.", "Yes, that is right.", "Thank you."],
     ),
     "wrong_birthday": dict(
         archetype="verification_fail",
@@ -55,7 +43,7 @@ SCENARIOS = {
         archetype="hardship",
         outcome="handed_off",
         no=["propose_option", "confirm_option"],
-        lines=["Yes.", "{dob}", "I lost my job last month. I have nothing right now."],
+        lines=["Yes.", "{dob}", "I lost my job last month. I have nothing right now.", "Okay."],
     ),
     "says_already_paid": dict(
         archetype="dispute_already_paid",
@@ -142,10 +130,7 @@ def score(results: list[dict]) -> dict:
 
 
 def check(db, call, sc):
-    """Rules (must never break) and task (did it do the job), checked from the events table.
-
-    model_ms is how long each model reply took end to end (not streamed, so it is not TTFT).
-    """
+    """Rules (must never break) and task (did it do the job), checked from the events table."""
     from sqlalchemy import text
 
     rows = db.execute(

@@ -1,11 +1,6 @@
-"""Seed the fake lender with borrowers built for specific scenarios.
+"""Seed the fake lender: one borrower per scenario, all made up.
 
-Every borrower is a fixture for one archetype (see ARCHETYPES). The bench scenarios
-pair a fixture with a borrower persona and a set of hard checks, so the data and the
-tests stay in lockstep. Everything is fake: names, phone numbers, amounts.
-
-    uv run python -m engine.seed --dry-run
-    uv run python -m engine.seed --init-schema        # needs DATABASE_URL
+uv run python -m engine.seed --init-schema     # needs DATABASE_URL
 """
 
 from __future__ import annotations

@@ -1,25 +1,11 @@
-"""Speed and cost benchmarks for the two models. Runs on Modal, next to the servers, so the numbers
-are the servers' own and not the distance from your laptop.
+"""Speed and cost of the two models, measured on Modal next to the servers.
 
-The method is borrowed from kwindla/aiewf-eval: time to first token as percentiles (P50/P95/P99), and
-a voice target of about 700 ms for the model's first token. We keep only that part.
+    uv run --env-file .env modal run evals/bench.py::llm  --label rtx6000-bf16 --gpu RTX-PRO-6000 --price 3.03
+    uv run --env-file .env modal run evals/bench.py::tts  --label l4 --gpu L4 --price 0.80
+    uv run --env-file .env modal run evals/bench.py::cold --label plain --runs 3
 
-Brain (PhoneLLM). One "call" is the 5 requests the agent really makes, with the real prompt and tools:
-    uv run --env-file .env modal run evals/bench.py::llm --label rtx6000-bf16 --gpu RTX-PRO-6000 --price 3.03
-    --tools fixed          every request carries all 8 tools (the "before" in the tools experiment)
-    --levels 1,4,8,16      how many calls run at the same time
-    --note snapshot        what was different about this deploy (shown next to the cold start in the report)
-
-Voice (Chatterbox). It has no streaming, so we time the whole sentence and divide by the audio length:
-    uv run --env-file .env modal run evals/bench.py::tts --label l4 --gpu L4 --price 0.80
-
-Cold starts, on their own (puts the brain to sleep, then wakes it N times and times each wake-up):
-    uv run --env-file .env modal run evals/bench.py::cold --label snapshot --runs 5 --note snapshot
-    --gap 200              seconds to wait before each wake-up, so the server is really stopped (idle limit is 120 s)
-
-Start from a stopped server to measure a cold start (wait 3 minutes after the last request).
---price is Modal's price for that GPU per hour, from modal.com/pricing. Results go to evals/results/.
-Then:  uv run python -m evals.report --write
+--price is the GPU's price per hour. Results go to evals/results/, then: uv run python -m evals.report --write
+The method (time to first token as P50/P95/P99, goal 700 ms) is from kwindla/aiewf-eval.
 """
 
 from __future__ import annotations
@@ -44,9 +30,8 @@ RESULTS = Path(__file__).parent / "results"
 VLLM_VERSION = "0.30.0"
 SAMPLE_RATE = 24_000
 
-# ------------------------------------------------------------------ the brain: what one call asks of the model
 
-
+# the brain: what one call asks of the model
 def build_requests(tools_mode: str = "per_state", model: str = "phonellm-mini-alpha-2") -> list[dict]:
     """The 5 requests of a typical call, using the agent's real prompt, states and tools."""
     from engine.agent import STATES, TOOLS
@@ -257,8 +242,7 @@ def bench_llm(tools_mode: str, levels: list[int], price: float) -> dict:
     )
 
 
-# ------------------------------------------------------------------ the voice: whole sentences, no streaming
-
+# the voice: whole sentences, no streaming
 SENTENCES = {
     "short": ["Thank you.", "One moment, please.", "Goodbye."],
     "medium": [
@@ -345,9 +329,7 @@ def bench_tts(levels: list[int], price: float) -> dict:
     return asyncio.run(bench_tts_async(cfg.tts_url, cfg.models_api_key, levels, price))
 
 
-# ------------------------------------------------------------------ saving
-
-
+# saving
 def meta_for(kind: str, label: str, gpu: str, price: float, **extra: object) -> dict:
     return {"kind": kind, "label": label, "gpu": gpu, "usd_per_gpu_hour": price,
             "date": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"), **extra}  # fmt: skip

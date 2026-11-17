@@ -1,9 +1,4 @@
-"""The hard rules. Plain code, no model, no network.
-
-Every rule returns a Decision (allow or deny, a rule id and a reason code) and the caller
-writes each one to the events table. The numbers live in policy.yaml. The model can talk
-as much as it likes; these functions decide what is allowed to happen.
-"""
+"""The hard rules. Plain code, no model, no network. Numbers live in policy.yaml."""
 
 from __future__ import annotations
 
@@ -26,9 +21,7 @@ VERIFIED_ONLY_TOOLS = frozenset({"get_loan", "get_offers", "propose_option", "co
 ALWAYS_ALLOWED_TOOLS = frozenset({"hand_off", "opt_out", "end_call"})
 
 
-# ---------------------------------------------------------------- config
-
-
+# config
 class WindowConfig(BaseModel):
     start: time
     end: time
@@ -63,9 +56,7 @@ def load_policy(path: str | Path | None = None) -> PolicyConfig:
     return PolicyConfig.model_validate(yaml.safe_load(Path(path).read_text()))
 
 
-# ---------------------------------------------------------------- decisions
-
-
+# decisions
 @dataclass(frozen=True)
 class Decision:
     allowed: bool
@@ -95,9 +86,7 @@ def _aware(dt: datetime) -> datetime:
     return dt
 
 
-# ---------------------------------------------------------------- rules 1 to 3: before dialing
-
-
+# rules 1 to 3: before dialing
 def check_calling_window(now: datetime, cfg: PolicyConfig) -> Decision:
     """Rule 1: only call inside the local calling window."""
     local = _aware(now).astimezone(ZoneInfo(cfg.calling_window.timezone))
@@ -150,9 +139,7 @@ def can_dial(
     ]
 
 
-# ---------------------------------------------------------------- rule 4: disclosure (tool gating)
-
-
+# rule 4: disclosure (tool gating)
 def check_tool_precondition(tool: str, *, verified: bool, locked: bool) -> Decision:
     """Rule 4: no loan detail before identity is verified; a locked identity can only exit."""
     if tool in ALWAYS_ALLOWED_TOOLS:
@@ -164,9 +151,7 @@ def check_tool_precondition(tool: str, *, verified: bool, locked: bool) -> Decis
     return _allow("P4_DISCLOSURE", "allowed", tool=tool)
 
 
-# ---------------------------------------------------------------- rule 6: offers
-
-
+# rule 6: offers
 class PartPaymentLimits(BaseModel):
     min_ngn: Decimal
     max_ngn: Decimal
@@ -248,9 +233,7 @@ def validate_option(option: str, amount: Decimal | None, on: date | None, offers
     return _deny(rule, "unknown_option", option=option)
 
 
-# ---------------------------------------------------------------- rule 9: call length
-
-
+# rule 9: call length
 def check_call_length(elapsed_seconds: float, cfg: PolicyConfig) -> Decision:
     """Rule 9: after the limit, close gracefully."""
     if elapsed_seconds >= cfg.call.max_seconds:

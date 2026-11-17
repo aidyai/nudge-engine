@@ -1,28 +1,6 @@
-"""Chatterbox Turbo text-to-speech on Modal.
+"""Chatterbox Turbo text-to-speech on Modal: POST {"text": ...}, get 16-bit mono PCM at 24 kHz back.
 
-POST {"text": "..."} with the header  Authorization: Bearer <MODELS_API_KEY>
-and you get back raw 16-bit mono PCM audio at 24 kHz (also stated in the X-Sample-Rate header).
-
-One-time setup (the two secrets are the same ones deploy/llm.py uses):
-    uv run modal secret create huggingface-secret HF_TOKEN=hf_xxx
-    uv run modal secret create nudge-models MODELS_API_KEY=<a long random string>
-
-Optional: a voice to clone. About 10 seconds of clear speech from a person who gave consent:
-    uv run modal volume create nudge-voices
-    uv run modal volume put nudge-voices ./voice.wav /voice.wav
-
-Deploy:
-    uv run modal deploy deploy/tts.py
-Modal prints the endpoint URL. Put it in .env as TTS_URL.
-
-Logs (one JSON line per request: sizes and timings, never the text):
-    uv run modal app logs nudge-tts
-    uv run modal app logs nudge-tts -f
-
-Cost rules built in: nothing runs while idle, a container stops 2 minutes after its last request,
-at most one container can run, and the default GPU is the cheap L4 (set TTS_GPU=A10 if it struggles).
-
-Based on Modal's own Chatterbox Turbo example, with a bearer-key check added.
+uv run modal deploy deploy/tts.py
 """
 
 from __future__ import annotations

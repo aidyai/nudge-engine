@@ -1,11 +1,7 @@
 """Turn the brain and the voice on and off by hand. Nothing here runs by itself.
 
-    uv run modal run deploy/warm.py::on      # keeps one brain and one voice awake now (the brain takes minutes to start)
-    uv run modal run deploy/warm.py::off     # lets them sleep again: do this when you finish, it stops the billing
-
-`off` does not delete anything. The apps stay deployed and the next request wakes them, it just starts from cold.
-A model that is awake bills by the hour. This uses Modal's runtime autoscaler update, which lasts until the next
-deploy of deploy/llm.py or deploy/tts.py (a deploy puts the settings back to zero, so a redeploy also stops it).
+uv run modal run deploy/warm.py::on
+uv run modal run deploy/warm.py::off     # when you finish: stops the billing, deletes nothing
 """
 
 from __future__ import annotations
