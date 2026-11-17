@@ -58,6 +58,10 @@ uv run pytest
 
 `docs/deploy.md`. In short: the models and the API run on Modal, and a push to `main` redeploys them after the tests pass. Deploying never starts a GPU, only a real request does.
 
+## Reading calls back
+
+Every call, sentence, tool call, rule check and promise is saved to the database. `GET /calls` lists them with totals and `GET /calls/<id>` returns one in full (phone numbers are masked). The website's dashboard reads these two routes, so it shows what really happened.
+
 ## Evals
 
 ```
@@ -91,7 +95,7 @@ The numbers are in `docs/performance.md`, made by the command above from the fil
 
 ## Phone calls
 
-Twilio can ring a number and the same agent talks to whoever answers. Only numbers you list in `ALLOWED_NUMBERS` can be called. See `docs/phone.md`.
+The same agent can answer a real phone line through Twilio. The phone route and its safety check (only numbers listed in `ALLOWED_NUMBERS` can ever be called) are built and covered by tests. We have not rung a live phone: a free Twilio trial locks the country settings that Nigerian numbers need, and a paid account unlocks it with no code change. To try the agent now, use the browser demo in the `nudge` repo. See `docs/phone.md`.
 
 ## Not done yet
 
@@ -99,4 +103,3 @@ Twilio can ring a number and the same agent talks to whoever answers. Only numbe
 - Reconciling payments against promises.
 - A real lender integration. The lender here is a few database tables.
 - Languages other than English.
-- A proper latency report. The terminal and Modal logs show timings, nothing more.

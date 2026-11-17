@@ -8,6 +8,7 @@ from tests.test_agent import Script, say
 
 KEY = {"X-API-Key": "secret"}
 GREETING = "Hello, this is an automated assistant calling for Sample Lender. Am I speaking with the borrower?"
+sim_months = "January February March April May June July August September October November December".split()
 PCM = b"\x01\x00" * 2400
 TRANSCRIPT = {"results": {"channels": [{"alternatives": [{"transcript": "I can pay on Friday", "confidence": 0.97}]}]}}
 
@@ -59,6 +60,7 @@ def test_starting_a_call_returns_the_greeting_and_the_state(pg_engine, db):
     r = client.post("/calls", headers=KEY).json()
     assert r["reply"] == GREETING and r["state"] == "verify" and r["verified"] is False and r["done"] is False
     assert len(r["call_id"]) == 36
+    assert r["borrower"]["name"] and r["borrower"]["birthday"].split()[1] in sim_months  # who the demo borrower is, so the page can say it
 
 
 def test_a_turn_goes_to_the_agent(pg_engine, db):

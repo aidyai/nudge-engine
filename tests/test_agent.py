@@ -208,6 +208,14 @@ def test_asking_to_stop_calling_is_final_and_needs_no_model(db):
     assert (call.done, call.outcome) == (True, "opted_out")
 
 
+def test_losing_a_job_hands_off_without_asking_the_model(db):
+    call, never = start(db), Script()
+    reply = turn(call, db, "I lost my job last month, I have nothing right now.", never)
+    assert "colleague will call you back" in reply and never.offered == []
+    assert count(db, "select count(*) from nudge.handoffs where reason = 'hardship'") == 1
+    assert (call.done, call.outcome) == (True, "handed_off")
+
+
 def test_asking_for_a_person_hands_off(db):
     call = start(db)
     turn(call, db, "I want to speak to a real person", Script())

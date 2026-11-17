@@ -1,5 +1,7 @@
 # Phone calls to your own numbers
 
+Status: built and tested, not yet rung on a live phone. A free Twilio trial locks the country settings Nigerian numbers need (Voice, Settings, Geo permissions ask you to upgrade). Until then, the browser demo in the `nudge` repo is the way to talk to the agent.
+
 Twilio rings a number, and the same agent that serves the website talks to whoever answers.
 Only the numbers in `ALLOWED_NUMBERS` can ever be called, so only people who agreed.
 

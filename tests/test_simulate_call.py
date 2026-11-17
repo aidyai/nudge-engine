@@ -1,6 +1,8 @@
 import io
 import wave
 
+import pytest
+
 from scripts import simulate_call as sim
 
 
@@ -82,3 +84,30 @@ def test_it_says_what_is_missing_instead_of_crashing(monkeypatch, capsys):
         monkeypatch.delenv(name, raising=False)
     assert sim.main([]) == 1
     assert "API_URL" in capsys.readouterr().out
+
+
+def test_the_call_waits_for_a_waking_model_and_asks_again(monkeypatch):
+    import httpx
+
+    answers = iter(
+        [
+            httpx.Response(502),
+            httpx.Response(408),
+            httpx.Response(200, json={"ok": True}, request=httpx.Request("POST", "https://engine.test")),
+        ]
+    )
+    monkeypatch.setattr(sim.time, "sleep", lambda _: None)
+    engine = sim.Engine("https://engine.test", "key", pause_s=0)
+    monkeypatch.setattr(engine.http, "request", lambda *a, **k: next(answers))
+    response, _ = engine._timed("POST", "/calls")
+    assert response.json() == {"ok": True}
+
+
+def test_the_call_gives_up_with_a_clear_message_when_nothing_wakes(monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(sim.time, "sleep", lambda _: None)
+    engine = sim.Engine("https://engine.test", "key", patience_s=0, pause_s=0)
+    monkeypatch.setattr(engine.http, "request", lambda *a, **k: httpx.Response(502))
+    with pytest.raises(SystemExit, match="Is the model awake"):
+        engine._timed("POST", "/speech/say")

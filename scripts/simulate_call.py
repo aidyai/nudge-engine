@@ -30,6 +30,7 @@ LINES = [
 ]  # the happy path, as a borrower would say it
 MONTHS = "January February March April May June July August September October November December".split()
 RESULTS = Path(__file__).resolve().parent.parent / "evals" / "results"
+STILL_STARTING = (408, 502, 503, 504)
 DEMO_ARCHETYPE = "cooperative_due_3d"  # the borrower the API's demo call rings
 
 
@@ -42,12 +43,22 @@ def spoken_birthday(day_month: str) -> str:
 class Engine:
     """The deployed API, as a caller sees it. Each method returns what it got and how long it took in milliseconds."""
 
-    def __init__(self, url: str, key: str, timeout: float = 600):
+    def __init__(self, url: str, key: str, timeout: float = 600, patience_s: float = 600, pause_s: float = 10):
         self.http = httpx.Client(base_url=url.rstrip("/"), headers={"X-API-Key": key}, timeout=timeout, follow_redirects=True)
+        self.patience_s, self.pause_s = patience_s, pause_s
 
     def _timed(self, method: str, path: str, **kwargs) -> tuple[httpx.Response, float]:
         started = time.perf_counter()
-        response = self.http.request(method, path, **kwargs)
+        while True:  # a sleeping model answers 408, 502, 503 or 504 while it wakes: wait and ask again
+            try:
+                response = self.http.request(method, path, **kwargs)
+            except httpx.TimeoutException:
+                response = None
+            if response is not None and response.status_code not in STILL_STARTING:
+                break
+            if time.perf_counter() - started > self.patience_s:
+                raise SystemExit(f"{path} did not answer in {self.patience_s:.0f} s. Is the model awake? Check Modal.")
+            time.sleep(self.pause_s)
         response.raise_for_status()
         return response, (time.perf_counter() - started) * 1000
 

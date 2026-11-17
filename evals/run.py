@@ -109,7 +109,7 @@ def run(only: str = "", runs: int = 1) -> dict:
                 print("YOU:  ", line)
                 print("AGENT:", turn(call, db, line, chat))
             res = check(db, call, sc)
-            print("tools used:", res["tools"] or "none")
+            print("tools used:", ", ".join(res["used"]) or "none")
             out.setdefault(name, []).append(res)
         db.close()
     return {name: score(rs) for name, rs in out.items()}
@@ -163,7 +163,7 @@ def check(db, call, sc):
     tool_problems += [f"never used {t}" for t in sc.get("use", []) if t not in tools]
     tool_problems += [f"used {t}, which it should not" for t in sc.get("no", []) if t in tools]
     model_ms = [ms for t, _, ms in rows if t == "model" and ms is not None]
-    return {"rules": rules, "task": task, "tools": tool_problems, "model_ms": model_ms, "outcome": outcome}
+    return {"rules": rules, "task": task, "tools": tool_problems, "used": tools, "model_ms": model_ms, "outcome": outcome}
 
 
 def show(scores: dict) -> None:

@@ -4,6 +4,7 @@ Call state lives in memory, so this runs as one container.
 """
 
 import secrets
+import uuid
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request, Response
@@ -11,9 +12,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
-from engine import agent
+from engine import agent, records
 from engine.audio import pcm_to_wav
-from engine.phone import add_phone_routes, run_phone_call
+from engine.phone import MONTHS, add_phone_routes, run_phone_call
 from engine.voices import KEYTERMS, SynthesisError, pcm_from_reply
 
 DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
@@ -54,12 +55,34 @@ def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_a
     def health():
         return {"status": "ok"}
 
+    @app.get("/calls")
+    def list_calls(limit: int = 50, x_api_key: str | None = Header(default=None)):
+        check(x_api_key)
+        with engine.connect() as db:
+            return records.list_calls(db, min(max(limit, 1), 200))
+
+    @app.get("/calls/{call_id}")
+    def one_call(call_id: str, x_api_key: str | None = Header(default=None)):
+        check(x_api_key)
+        try:
+            uuid.UUID(call_id)
+        except ValueError:
+            raise HTTPException(404, "no such call") from None
+        with engine.connect() as db:
+            detail = records.call_detail(db, call_id)
+        if detail is None:
+            raise HTTPException(404, "no such call")
+        return detail
+
     @app.post("/calls")
     def start_call(x_api_key: str | None = Header(default=None)):
         check(x_api_key)
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as db:
             row = db.execute(
-                text("select id from lender.borrowers where archetype = :a and not opted_out order by id limit 1"), {"a": demo_archetype}
+                text(
+                    "select id, full_name, birth_day_month from lender.borrowers where archetype = :a and not opted_out order by id limit 1"
+                ),
+                {"a": demo_archetype},
             ).first()
             if row is None:
                 raise HTTPException(503, "no demo borrower in the database: run the seed command")
@@ -71,7 +94,12 @@ def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_a
         calls[call.id] = call
         if len(calls) > MAX_CALLS_KEPT:
             calls.pop(next(iter(calls)))
-        return view(call, reply)
+        day, month = row.birth_day_month.split("-")
+        who = {
+            "name": row.full_name,
+            "birthday": f"{int(day)} {MONTHS[int(month) - 1]}",
+        }  # the demo borrower, so the page can tell you who to be
+        return {**view(call, reply), "borrower": who}
 
     @app.post("/calls/{call_id}/turns")
     def take_turn(call_id: str, body: Turn, x_api_key: str | None = Header(default=None)):

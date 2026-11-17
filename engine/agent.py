@@ -194,7 +194,13 @@ TRIGGERS = [  # words that mean the same thing in any state. Code acts at once, 
         "requested_human",
         "Of course. A colleague will call you back. Goodbye.",
     ),
+    (
+        r"lost (my|the) (job|work|business)|out of work|unemployed|no income|nothing right now",
+        "hardship",
+        "I am sorry to hear that. A colleague will call you back to talk it through. Goodbye.",
+    ),
 ]
+SUMMARY = {"requested_human": "The caller asked for a person.", "hardship": "The caller said they cannot pay because of hardship."}
 
 
 # the tools. Each one returns a small dict.
@@ -363,7 +369,7 @@ def turn(call, db, user_text, chat):
             if reason == "opt_out":
                 run_tool(call, db, "opt_out", {})
             else:
-                run_tool(call, db, "hand_off", {"reason": reason, "summary": "The caller asked for a person."})
+                run_tool(call, db, "hand_off", {"reason": reason, "summary": SUMMARY[reason]})
             return finish(call, db, line)
     call.messages.append({"role": "user", "content": user_text})
     return respond(call, db, chat)
