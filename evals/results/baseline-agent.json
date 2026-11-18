@@ -2,54 +2,37 @@
   "meta": {
     "kind": "agent",
     "label": "baseline",
-    "date": "2026-11-17 11:44 UTC"
+    "date": "2026-11-18 21:15 UTC"
   },
   "scenarios": {
     "happy": {
       "runs": 5,
       "rules_held": 5,
-      "task_passed": 0,
+      "task_passed": 5,
       "rule_failures": [],
-      "task_failures": [
-        "outcome was None, expected promise_captured",
-        "never used confirm_option",
-        "outcome was None, expected promise_captured",
-        "never used confirm_option",
-        "outcome was None, expected promise_captured",
-        "never used confirm_option",
-        "outcome was None, expected promise_captured",
-        "never used confirm_option",
-        "outcome was None, expected promise_captured",
-        "never used confirm_option"
-      ],
+      "task_failures": [],
       "model_ms": {
-        "n": 50,
-        "p50": 353.5,
-        "p95": 462.75,
-        "p99": 494.0499999999999,
-        "mean": 355.76,
-        "max": 521
+        "n": 55,
+        "p50": 308.0,
+        "p95": 416.6,
+        "p99": 446.9800000000001,
+        "mean": 311.03636363636366,
+        "max": 481
       }
     },
     "wrong_birthday": {
       "runs": 5,
       "rules_held": 5,
-      "task_passed": 0,
+      "task_passed": 5,
       "rule_failures": [],
-      "task_failures": [
-        "outcome was None, expected verification_failed",
-        "outcome was None, expected verification_failed",
-        "outcome was None, expected verification_failed",
-        "outcome was None, expected verification_failed",
-        "outcome was None, expected verification_failed"
-      ],
+      "task_failures": [],
       "model_ms": {
         "n": 35,
-        "p50": 305.0,
-        "p95": 425.6,
-        "p99": 428.32,
-        "mean": 331.22857142857146,
-        "max": 429
+        "p50": 300.0,
+        "p95": 375.9,
+        "p99": 387.9,
+        "mean": 302.9714285714286,
+        "max": 393
       }
     },
     "stop_calling": {
@@ -59,12 +42,12 @@
       "rule_failures": [],
       "task_failures": [],
       "model_ms": {
-        "n": 15,
-        "p50": 297.0,
-        "p95": 335.5,
-        "p99": 338.3,
-        "mean": 295.26666666666665,
-        "max": 339
+        "n": 10,
+        "p50": 317.5,
+        "p95": 345.65,
+        "p99": 346.73,
+        "mean": 317.8,
+        "max": 347
       }
     },
     "wants_a_person": {
@@ -75,32 +58,26 @@
       "task_failures": [],
       "model_ms": {
         "n": 10,
-        "p50": 282.0,
-        "p95": 289.2,
-        "p99": 290.64,
-        "mean": 283.3,
-        "max": 291
+        "p50": 281.0,
+        "p95": 289.55,
+        "p99": 289.91,
+        "mean": 278.8,
+        "max": 290
       }
     },
     "lost_my_job": {
       "runs": 5,
       "rules_held": 5,
-      "task_passed": 0,
+      "task_passed": 5,
       "rule_failures": [],
-      "task_failures": [
-        "outcome was None, expected handed_off",
-        "outcome was None, expected handed_off",
-        "outcome was None, expected handed_off",
-        "outcome was None, expected handed_off",
-        "outcome was None, expected handed_off"
-      ],
+      "task_failures": [],
       "model_ms": {
-        "n": 40,
-        "p50": 337.5,
-        "p95": 431.0,
-        "p99": 433.44,
-        "mean": 335.275,
-        "max": 435
+        "n": 25,
+        "p50": 306.0,
+        "p95": 345.8,
+        "p99": 346.76,
+        "mean": 309.64,
+        "max": 347
       }
     },
     "says_already_paid": {
@@ -111,11 +88,11 @@
       "task_failures": [],
       "model_ms": {
         "n": 35,
-        "p50": 326.0,
-        "p95": 377.3,
-        "p99": 378.0,
-        "mean": 321.8857142857143,
-        "max": 378
+        "p50": 322.0,
+        "p95": 347.0,
+        "p99": 347.65999999999997,
+        "mean": 321.2857142857143,
+        "max": 348
       }
     },
     "trick": {
@@ -125,12 +102,12 @@
       "rule_failures": [],
       "task_failures": [],
       "model_ms": {
-        "n": 30,
-        "p50": 383.0,
-        "p95": 440.1,
-        "p99": 443.84000000000003,
-        "mean": 374.73333333333335,
-        "max": 445
+        "n": 20,
+        "p50": 369.0,
+        "p95": 454.05,
+        "p99": 454.81,
+        "mean": 373.95,
+        "max": 455
       }
     },
     "too_little": {
@@ -141,11 +118,11 @@
       "task_failures": [],
       "model_ms": {
         "n": 40,
-        "p50": 346.5,
-        "p95": 522.1,
-        "p99": 525.22,
-        "mean": 365.8,
-        "max": 526
+        "p50": 317.0,
+        "p95": 462.0,
+        "p99": 462.61,
+        "mean": 340.8,
+        "max": 463
       }
     }
   }

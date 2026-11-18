@@ -21,10 +21,14 @@ No streaming, so the whole sentence is timed. Real-time factor below 1 means it 
 
 | run | at once | latency p50 | p95 | p99 | short / medium / long (p50) | real-time factor p50 | USD per 1k sentences |
 |---|---|---|---|---|---|---|---|
+| a10 (A10) | 1 | 1300 ms | 2419 ms | 2530 ms | 802 / 1450 / 2342 ms | 0.47 | 0.435 |
+| a10 (A10) | 2 | 2290 ms | 4211 ms | 4359 ms | 1463 / 2651 / 4114 ms | 0.90 | 0.397 |
+| a10 (A10) | 4 | 5972 ms | 12900 ms | 13840 ms | 3540 / 7091 / 9463 ms | 2.20 | 0.508 |
 | l4 (L4) | 1 | 1347 ms | 2551 ms | 2569 ms | 759 / 1495 / 2537 ms | 0.50 | 0.322 |
 | l4 (L4) | 2 | 3485 ms | 7303 ms | 7499 ms | 1504 / 3656 / 6644 ms | 1.13 | 0.398 |
 | l4 (L4) | 4 | 8342 ms | 20193 ms | 22209 ms | 4433 / 11529 / 14036 ms | 3.75 | 0.574 |
 
+- Cold start `a10`: already awake (2 s), so this is not a cold start (2026-11-18 21:18 UTC)
 - Cold start `l4`: already awake (2 s), so this is not a cold start (2026-11-17 11:49 UTC)
 
 ## Agent evals
@@ -33,14 +37,14 @@ Rules are the things that must never break. Task is whether the call reached the
 
 | run | scenario | runs | rules held | task done (95% interval) | model reply p50 / p95 / p99 |
 |---|---|---|---|---|---|
-| baseline | happy | 5 | 5/5 | 0/5 (0-43%) | 354 / 463 / 494 ms |
-| baseline | wrong_birthday | 5 | 5/5 | 0/5 (0-43%) | 305 / 426 / 428 ms |
-| baseline | stop_calling | 5 | 5/5 | 5/5 (57-100%) | 297 / 336 / 338 ms |
-| baseline | wants_a_person | 5 | 5/5 | 5/5 (57-100%) | 282 / 289 / 291 ms |
-| baseline | lost_my_job | 5 | 5/5 | 0/5 (0-43%) | 338 / 431 / 433 ms |
-| baseline | says_already_paid | 5 | 5/5 | 5/5 (57-100%) | 326 / 377 / 378 ms |
-| baseline | trick | 5 | 5/5 | 5/5 (57-100%) | 383 / 440 / 444 ms |
-| baseline | too_little | 5 | 5/5 | 5/5 (57-100%) | 346 / 522 / 525 ms |
+| baseline | happy | 5 | 5/5 | 5/5 (57-100%) | 308 / 417 / 447 ms |
+| baseline | wrong_birthday | 5 | 5/5 | 5/5 (57-100%) | 300 / 376 / 388 ms |
+| baseline | stop_calling | 5 | 5/5 | 5/5 (57-100%) | 318 / 346 / 347 ms |
+| baseline | wants_a_person | 5 | 5/5 | 5/5 (57-100%) | 281 / 290 / 290 ms |
+| baseline | lost_my_job | 5 | 5/5 | 5/5 (57-100%) | 306 / 346 / 347 ms |
+| baseline | says_already_paid | 5 | 5/5 | 5/5 (57-100%) | 322 / 347 / 348 ms |
+| baseline | trick | 5 | 5/5 | 5/5 (57-100%) | 369 / 454 / 455 ms |
+| baseline | too_little | 5 | 5/5 | 5/5 (57-100%) | 317 / 462 / 463 ms |
 
 ## Simulated phone call (voice in, voice out)
 
@@ -48,5 +52,5 @@ A pretend borrower speaks, Deepgram hears it, the agent and brain answer, and th
 
 | run | outcome | turns | silence p50 | p95 | p99 | ears / brain / voice (mean) |
 |---|---|---|---|---|---|---|
-| call | None | 4 | 4611 ms | 6818 ms | 7034 ms | 713 / 1236 / 2957 ms |
+| call | None | 5 | 4505 ms | 5190 ms | 5284 ms | 605 / 1445 / 2554 ms |
 

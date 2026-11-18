@@ -2,61 +2,71 @@
   "meta": {
     "kind": "call",
     "label": "call",
-    "date": "2026-11-17 11:38 UTC"
+    "date": "2026-11-18 20:56 UTC"
   },
   "outcome": null,
-  "verified": true,
+  "verified": false,
   "done": false,
-  "start_ms": 8003.9458720002585,
-  "greeting_tts_ms": 4700.09812599983,
+  "start_ms": 4779.860385999655,
+  "greeting_tts_ms": 3588.8390119998803,
   "turns": [
     {
       "said": "Yes, speaking.",
       "heard": "Yes speaking",
-      "reply": "Thank you. Could I please have your day and month of birth?",
+      "reply": "Thanks, Musa. I'm calling about a quick matter on your account \u2014 could I please have your day and month of birth to make sure it's you?",
       "state": "verify",
-      "stt_ms": 858.4596399996371,
-      "brain_ms": 725.9500809996098,
-      "tts_ms": 1730.1974710007926,
-      "silence_ms": 3314.6071920000395
+      "stt_ms": 468.80766599997514,
+      "brain_ms": 1924.3944149998242,
+      "tts_ms": 2914.4898260001355,
+      "silence_ms": 5307.691906999935
     },
     {
       "said": "21 January",
-      "heard": "January 21.",
-      "reply": "Your loan of twenty-five thousand naira is due on Friday, the twentieth of November, which is three days from now. What would you like to do?",
-      "state": "explain",
-      "stt_ms": 508.51221600078134,
-      "brain_ms": 1416.5331849999347,
-      "tts_ms": 3364.367489999495,
-      "silence_ms": 5289.412891000211
+      "heard": "2000 January",
+      "reply": "That didn't match, I'm afraid. Could you try once more with your day and month of birth?",
+      "state": "verify",
+      "stt_ms": 408.3578079998915,
+      "brain_ms": 1756.2013699998715,
+      "tts_ms": 2082.8681939997296,
+      "silence_ms": 4247.427371999493
     },
     {
       "said": "I can pay on Friday.",
-      "heard": "I can pay on Friday.",
-      "reply": "You can pay the full twenty-five thousand naira on Friday, or make a part payment of at least twelve thousand five hundred naira. Would you like to pay the full amount on Friday?",
-      "state": "arrange",
-      "stt_ms": 799.9135249992833,
-      "brain_ms": 1581.0519629994815,
-      "tts_ms": 4707.26034099971,
-      "silence_ms": 7088.225828998475
+      "heard": "I can pay on friday",
+      "reply": "I understand, but first I just need to verify your identity \u2014 could you give me your day and month of birth?",
+      "state": "verify",
+      "stt_ms": 725.5363059998672,
+      "brain_ms": 1023.6278020001919,
+      "tts_ms": 2492.1890959999473,
+      "silence_ms": 4241.353204000006
     },
     {
       "said": "Yes, that is right.",
       "heard": "Yes that is right",
-      "reply": "Just to confirm: pay twenty-five thousand naira now. Is that right?",
-      "state": "confirm",
-      "stt_ms": 685.0784859998384,
-      "brain_ms": 1222.024567000517,
-      "tts_ms": 2025.1010510000924,
-      "silence_ms": 3932.204104000448
+      "reply": "I'm sorry, I'm not able to accept that as a date of birth. Could you try once more with your day and month of birth?",
+      "state": "verify",
+      "stt_ms": 589.0463539999473,
+      "brain_ms": 1212.5374339998416,
+      "tts_ms": 2703.2093899997562,
+      "silence_ms": 4504.793177999545
+    },
+    {
+      "said": "Thank you.",
+      "heard": "Thank you",
+      "reply": "I'm sorry, I'm not able to accept that as a date of birth. Could you try once more with your day and month of birth?",
+      "state": "verify",
+      "stt_ms": 834.6600749996469,
+      "brain_ms": 1306.5219519999118,
+      "tts_ms": 2579.3338270000277,
+      "silence_ms": 4720.515853999586
     }
   ],
   "silence_ms": {
-    "n": 4,
-    "p50": 4610.808497500329,
-    "p95": 6818.403888298735,
-    "p99": 7034.261440858527,
-    "mean": 4906.112503999793,
-    "max": 7088.225828998475
+    "n": 5,
+    "p50": 4504.793177999545,
+    "p95": 5190.256696399865,
+    "p99": 5284.204864879921,
+    "mean": 4604.356302999713,
+    "max": 5307.691906999935
   }
 }
