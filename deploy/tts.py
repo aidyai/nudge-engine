@@ -21,7 +21,7 @@ MINUTES = 60
 SAMPLE_RATE = 24_000
 MAX_CHARS = 600  # protects the GPU from one huge request
 VOICE_FILE = Path("/voices/voice.wav")
-GPU = os.environ.get("TTS_GPU", "L4")  # about $0.80 an hour; Modal's example uses the A10 at about $1.10
+GPU = os.environ.get("TTS_GPU", "A10")  # about $1.10 an hour. The L4 is cheaper but its capacity ran out, so the voice never started
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -83,6 +83,8 @@ def float_to_pcm16(samples: np.ndarray) -> bytes:
 class Chatterbox:
     @modal.enter()
     def load(self):
+        voices.reload()  # sees a voice.wav uploaded after the volume was last mounted
+        logger.info("voice: %s", "cloned from /voices/voice.wav" if VOICE_FILE.exists() else "the model's default")
         self.model = ChatterboxTurboTTS.from_pretrained(device="cuda")
         weights.commit()  # keep the downloaded weights for the next cold start
         self.synthesize("Warming up.")  # the first real request is then not the slow one

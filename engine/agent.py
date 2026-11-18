@@ -11,13 +11,15 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from engine import lender, policy
+from engine import lender, policy, tracing
 from engine.output_check import check_output, norm
 from engine.prompts import PROMPT_VERSION, agent_prompt
 from engine.speech import date_to_words, naira_to_words, number_to_words
 
 CFG = policy.load_policy()
 LAGOS = ZoneInfo(CFG.calling_window.timezone)
+LENDER = "Nudge Finance"  # the made-up lender the agent calls for
+RETRY_LINE = "Sorry, I missed that. Could you say it once more?"
 SAFE_LINE = "Sorry, I am having trouble. A colleague will call you back. Goodbye."
 MAX_STEPS = 6  # model calls allowed for one borrower sentence
 
@@ -130,6 +132,7 @@ class Call:
     verified: bool = False
     locked: bool = False
     failures: int = 0
+    slips: int = 0  # turns where the model gave no safe reply; the first is forgiven
     offers: policy.Offers | None = None
     pending: dict | None = None  # the option waiting for a yes
     readback: str = ""  # the sentence the agent must say next, written by code
@@ -157,7 +160,7 @@ def start_call(db, borrower_id, today=None, check_dialing=True, now=None):
         if denied := policy.first_denial(verdicts):
             raise PermissionError(f"not allowed to call: {denied.rule} {denied.reason}")
     call = Call(lender.new_call(db, borrower_id, PROMPT_VERSION), borrower, lender.get_loan(db, borrower_id), today)
-    call.messages = [{"role": "system", "content": agent_prompt(borrower["full_name"], "Sample Lender", today)}]
+    call.messages = [{"role": "system", "content": agent_prompt(borrower["full_name"], borrower.get("company") or LENDER, today)}]
     lender.log_event(db, call.id, "call_started", {"borrower": borrower_id, "state": call.state})
     return call
 
@@ -337,6 +340,13 @@ FUNCS = {name: globals()["t_" + name] for name in TOOLS}
 
 def run_tool(call, db, name, args):
     """The one door every tool call goes through: is it shown in this state, does policy allow it, then run it."""
+    with tracing.span(name, as_type="tool", input=args) as step:
+        result = _run_tool(call, db, name, args)
+        step.update(output=result)
+    return result
+
+
+def _run_tool(call, db, name, args):
     started = time.monotonic()
     if name not in STATES[call.state] or name not in TOOLS:
         result = {"error": f"{name} is not available now"}
@@ -362,6 +372,13 @@ def run_tool(call, db, name, args):
 # the conversation loop
 def turn(call, db, user_text, chat):
     """One borrower sentence in, one agent reply out. `chat(messages, tools)` is the model."""
+    with tracing.span("turn", session=call.id, input=user_text) as step:
+        reply = _turn(call, db, user_text, chat)
+        step.update(output=reply, metadata={"state": call.state, "outcome": call.outcome})
+    return reply
+
+
+def _turn(call, db, user_text, chat):
     lender.log_event(db, call.id, "user", {"text": user_text})
     call.user_turns += 1
     for pattern, reason, line in TRIGGERS:
@@ -377,15 +394,20 @@ def turn(call, db, user_text, chat):
 
 def greet(call, db, chat):
     """The agent speaks first, when the call connects."""
-    call.messages.append({"role": "user", "content": "[The call just connected. Greet the person now.]"})
-    return respond(call, db, chat)
+    with tracing.span("greet", session=call.id) as step:
+        call.messages.append({"role": "user", "content": "[The call just connected. Greet the person now.]"})
+        reply = respond(call, db, chat)
+        step.update(output=reply)
+    return reply
 
 
 def respond(call, db, chat):
     failed = 0
     for _ in range(MAX_STEPS):
         started = time.monotonic()
-        msg = chat(call.messages, [TOOLS[n] for n in STATES[call.state]])
+        with tracing.span("brain", as_type="generation", input=call.messages[-1]) as step:
+            msg = chat(call.messages, [TOOLS[n] for n in STATES[call.state]])
+            step.update(output=msg.get("content") or [c["function"]["name"] for c in msg.get("tool_calls") or []])
         lender.log_event(
             db,
             call.id,
@@ -406,6 +428,8 @@ def respond(call, db, chat):
         reply = (msg.get("content") or "").strip()
         if problem := check_output(reply, call.facts, call.verified, call.readback):
             lender.log_event(db, call.id, "output_check", {"problem": problem})
+            with tracing.span("output_check", as_type="guardrail", input=reply, level="WARNING", status_message=problem):
+                pass
             failed += 1
             if failed == 2:
                 break  # two bad replies in a row: stop trusting the model on this call
@@ -425,6 +449,12 @@ def respond(call, db, chat):
             call.done = True
             lender.end_call(db, call.id, call.outcome or "technical_failure")
         return reply
+    if call.slips == 0 and call.state not in ("close", "handoff"):
+        call.slips += 1  # one slip is forgiven: ask again instead of ending the call
+        call.messages.append({"role": "assistant", "content": RETRY_LINE})
+        call.agent_turns += 1
+        lender.log_event(db, call.id, "agent", {"text": RETRY_LINE})
+        return RETRY_LINE
     if call.state != "handoff":
         run_tool(
             call,

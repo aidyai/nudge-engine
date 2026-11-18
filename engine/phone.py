@@ -10,7 +10,7 @@ from fastapi import Header, HTTPException, Request, WebSocket
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
-from pipecat.frames.frames import EndWorkerFrame, Frame, LLMContextFrame, TTSSpeakFrame
+from pipecat.frames.frames import EndWorkerFrame, Frame, LLMContextFrame, OutputTransportMessageFrame, TTSSpeakFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -48,20 +48,36 @@ def last_user_text(context):
 class AgentVoice(FrameProcessor):
     """Sits where the LLM normally sits. When the caller finishes a turn, ask the agent and speak its reply."""
 
-    def __init__(self, call, db, chat):
+    def __init__(self, call, db, chat, announce=False):
         super().__init__()
         self.call, self.db, self.chat = call, db, chat
+        self.announce = announce  # tell the web page what was said (the phone has no page)
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
         if isinstance(frame, LLMContextFrame):  # the caller finished talking
             if heard := last_user_text(frame.context).strip():
+                await self.tell({"type": "user", "text": heard})
                 await self.say(await asyncio.to_thread(agent.turn, self.call, self.db, heard, self.chat))
         else:
             await self.push_frame(frame, direction)
 
+    async def tell(self, message):
+        if self.announce:
+            await self.push_frame(OutputTransportMessageFrame(message=message))
+
     async def say(self, reply):
         if reply:
+            await self.tell(
+                {
+                    "type": "agent",
+                    "text": reply,
+                    "state": self.call.state,
+                    "verified": self.call.verified,
+                    "outcome": self.call.outcome,
+                    "done": self.call.done,
+                }
+            )
             await self.push_frame(TTSSpeakFrame(reply))
         if self.call.done:  # hang up after the last words are spoken
             await self.push_frame(EndWorkerFrame(), FrameDirection.UPSTREAM)

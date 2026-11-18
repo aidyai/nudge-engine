@@ -8,6 +8,10 @@ from hypothesis import strategies as st
 from deploy import llm, tts
 
 
+def test_the_voice_runs_on_an_a10_unless_told_otherwise():
+    assert tts.GPU == "A10"
+
+
 def test_vllm_command_follows_the_model_card_recipe():
     cmd = llm.build_vllm_command("a-key")
     assert cmd[:3] == ["vllm", "serve", "pipecat-ai/phonellm-mini-alpha-2"]

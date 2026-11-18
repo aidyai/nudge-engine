@@ -2,14 +2,14 @@
 
     uv run modal deploy deploy/api.py
 
-One container, because call state lives in memory. Scales to zero.
+One container, because call state lives in memory. Scales to zero. Live calls (websocket) run here too.
 """
 
 from importlib.metadata import version
 
 import modal
 
-PINS = [f"{n}=={version(n)}" for n in ("fastapi", "httpx", "sqlalchemy", "pydantic", "pydantic-settings", "pyyaml", "tzdata")]
+PINS = [f"{n}=={version(n)}" for n in ("fastapi", "httpx", "sqlalchemy", "pydantic", "pydantic-settings", "pyyaml", "tzdata", "langfuse")]
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_pip_install(f"pipecat-ai[deepgram,silero,websocket]=={version('pipecat-ai')}", *PINS, f"psycopg[binary]=={version('psycopg')}")
@@ -21,6 +21,8 @@ app = modal.App("nudge-api")
 @app.function(
     image=image,
     secrets=[modal.Secret.from_name("nudge-env")],
+    cpu=2.0,  # the voice detector and smart-turn run here, for every live call
+    memory=2048,
     min_containers=0,
     max_containers=1,
     scaledown_window=10 * 60,

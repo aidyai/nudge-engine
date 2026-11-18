@@ -9,12 +9,13 @@ import uuid
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import text
 from starlette.concurrency import run_in_threadpool
 
 from engine import agent, records
 from engine.audio import pcm_to_wav
-from engine.phone import MONTHS, add_phone_routes, run_phone_call
+from engine.intake import NewBorrower, WhoToCall, create_borrower, describe, pick_borrower
+from engine.phone import add_phone_routes, run_phone_call
+from engine.realtime import add_realtime_routes, run_browser_call
 from engine.voices import KEYTERMS, SynthesisError, pcm_from_reply
 
 DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
@@ -30,7 +31,9 @@ class Say(BaseModel):
     text: str = Field(min_length=1, max_length=600)
 
 
-def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_archetype="cooperative_due_3d"):
+def create_app(
+    cfg, engine, chat, http=None, phone_runner=run_phone_call, realtime_runner=run_browser_call, demo_archetype="cooperative_due_3d"
+):
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)  # the URL is public: no docs
     http = http or httpx.Client()
     calls = {}  # call id -> agent.Call
@@ -74,18 +77,24 @@ def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_a
             raise HTTPException(404, "no such call")
         return detail
 
+    @app.post("/borrowers")
+    def new_borrower(form: NewBorrower, x_api_key: str | None = Header(default=None)):
+        check(x_api_key)
+        try:
+            form.day_month()
+        except ValueError as e:
+            raise HTTPException(422, "that day and month do not exist together, like 31 February") from e
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as db:
+            borrower_id = create_borrower(db, form)
+            return {"borrower_id": borrower_id, "borrower": describe(pick_borrower(db, borrower_id, demo_archetype))}
+
     @app.post("/calls")
-    def start_call(x_api_key: str | None = Header(default=None)):
+    def start_call(body: WhoToCall | None = None, x_api_key: str | None = Header(default=None)):
         check(x_api_key)
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as db:
-            row = db.execute(
-                text(
-                    "select id, full_name, birth_day_month from lender.borrowers where archetype = :a and not opted_out order by id limit 1"
-                ),
-                {"a": demo_archetype},
-            ).first()
+            row = pick_borrower(db, body.borrower_id if body else None, demo_archetype)
             if row is None:
-                raise HTTPException(503, "no demo borrower in the database: run the seed command")
+                raise HTTPException(503, "no such borrower in the database: run the seed command, or fill in the form again")
             call = agent.start_call(db, row.id, check_dialing=False)  # a demo: the calling-hours rule is for the real scheduler
             try:
                 reply = agent.greet(call, db, chat)
@@ -94,12 +103,7 @@ def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_a
         calls[call.id] = call
         if len(calls) > MAX_CALLS_KEPT:
             calls.pop(next(iter(calls)))
-        day, month = row.birth_day_month.split("-")
-        who = {
-            "name": row.full_name,
-            "birthday": f"{int(day)} {MONTHS[int(month) - 1]}",
-        }  # the demo borrower, so the page can tell you who to be
-        return {**view(call, reply), "borrower": who}
+        return {**view(call, reply), "borrower": describe(row)}
 
     @app.post("/calls/{call_id}/turns")
     def take_turn(call_id: str, body: Turn, x_api_key: str | None = Header(default=None)):
@@ -173,4 +177,5 @@ def create_app(cfg, engine, chat, http=None, phone_runner=run_phone_call, demo_a
         return Response(pcm_to_wav(pcm), media_type="audio/wav")
 
     add_phone_routes(app, cfg, engine, chat, http, check, runner=phone_runner, demo_archetype=demo_archetype)
+    add_realtime_routes(app, cfg, engine, chat, check, runner=realtime_runner, demo_archetype=demo_archetype)
     return app

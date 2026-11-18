@@ -111,8 +111,19 @@ def call_table(runs: list[dict]) -> str:
     return "\n".join(rows)
 
 
+def live_table(runs: list[dict]) -> str:
+    """The live (streaming) calls: what the borrower waits through after they stop speaking, turn by turn."""
+    rows = ["| run | outcome | turns | silence p50 | p95 | p99 |", "|---|---|---|---|---|---|"]
+    for r in runs:
+        s = r["silence_ms"]
+        rows.append(
+            f"| {r['meta']['label']} | {r['outcome']} | {len(r['turns'])} | {f(s['p50'])} ms | {f(s['p95'])} ms | {f(s['p99'])} ms |"
+        )
+    return "\n".join(rows)
+
+
 def main(write: bool = False) -> str:
-    llm, tts, agent, cold, call = load("llm"), load("tts"), load("agent"), load("cold"), load("call")
+    llm, tts, agent, cold, call, live = load("llm"), load("tts"), load("agent"), load("cold"), load("call"), load("live")
     parts = [
         "# Performance",
         "",
@@ -160,6 +171,17 @@ def main(write: bool = False) -> str:
             call_table(call),
             "",
         ]
+    if live:
+        parts += [
+            "## Live call (streaming, what the browser uses)",
+            "",
+            "The pretend borrower streams its voice over the websocket in real time, like the browser does. "
+            "Silence is from the borrower's last sound to the agent's first sound, and includes the voice detector, smart-turn, "
+            "the ears, the brain and the voice. The voice still speaks a whole sentence at a time.",
+            "",
+            live_table(live),
+            "",
+        ]
     if cold:
         parts += [
             "## Cold starts (brain)",
@@ -169,7 +191,7 @@ def main(write: bool = False) -> str:
             cold_table(cold),
             "",
         ]
-    if not (llm or tts or agent or cold or call):
+    if not (llm or tts or agent or cold or call or live):
         parts += ["No results yet. Run the benchmarks first (see the top of `evals/bench.py`)."]
     text = "\n".join(parts) + "\n"
     if write:

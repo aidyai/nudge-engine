@@ -10,6 +10,10 @@ def test_it_names_the_borrower_the_lender_and_today():
     assert "Monday, 2026-11-09" in PROMPT
 
 
+def test_the_agent_introduces_itself_by_name_and_is_open_about_being_automated():
+    assert "Hello, this is Idara, an automated assistant from Sample Lender. Am I speaking with Musa Bello?" in PROMPT
+
+
 def test_it_carries_no_loan_facts():
     assert "naira" not in PROMPT.lower().replace("never", "")  # amounts come from tools, not from the prompt
 

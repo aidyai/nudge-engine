@@ -21,11 +21,11 @@ The model decides what to say and which tool to call. Plain code decides what is
 ## What is in here
 
 ```
-engine/    the agent, the rules, the API, phone calls
+engine/    the agent, the rules, the API, live browser calls (realtime.py), phone calls, tracing
 deploy/    what runs on Modal: llm.py (the brain), tts.py (the voice), api.py
 evals/     scripted borrowers, speed benchmarks and the report that turns them into tables
 db/        database migrations
-scripts/   launch.py (one-command setup), simulate_call.py (a voice call without a phone), check_services.py
+scripts/   launch.py (one-command setup), simulate_call.py and simulate_live.py (voice calls without a phone), check_services.py
 notebooks/ the Colab notebook: setup, a simulated call, evals, benchmarks, cold starts, report, stop
 tests/     unit tests, no keys and no GPU needed
 docs/      deploying, and phone calls
@@ -58,6 +58,34 @@ uv run pytest
 
 `docs/deploy.md`. In short: the models and the API run on Modal, and a push to `main` redeploys them after the tests pass. Deploying never starts a GPU, only a real request does.
 
+## Live calls
+
+The website's demo is a live call, not a recording per sentence. The browser streams the microphone to `/realtime/stream` and gets the agent's voice back as it is made (`engine/realtime.py`). The pipeline is Pipecat:
+
+```
+microphone -> Silero (is there sound?) -> Deepgram (words) -> smart-turn-v3 (are they finished?) -> agent -> voice -> speaker
+```
+
+- **Silero VAD** and **smart-turn-v3** come with Pipecat and run on the CPU of the API container, so they have no cold start of their own. The brain and the voice still wake from sleep.
+- Talking over the agent interrupts it.
+- The browser cannot send the API key on a websocket, so the website asks for a signed ticket first (`POST /realtime/tickets`, good for one minute).
+- Pipecat measures each turn. The wait after the caller stops is saved on the call, split into its parts, as a `silence` event.
+- `uv run python -m scripts.simulate_live` plays a whole call over the websocket and measures the silence, like the browser would.
+
+Not done: the Pipecat **backchannel detector** ("mm-hm" must not interrupt) and the tone models. They need their own wiring and testing and we have not verified either. The voice still speaks a whole sentence at a time, which is the main reason the wait is long.
+
+## Tracing in Langfuse
+
+Optional. Put `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env` (a free [Langfuse Cloud](https://cloud.langfuse.com) project is enough) and every call is traced: one session per call, a step for each turn, each brain call, each tool and each rule check. Eval runs go there too, tagged with their label, with the plain scores (`rules_held`, `task_passed`, `model_ms_max`) attached to each run. Without the keys nothing is sent and nothing changes.
+
+## Who to call
+
+The website has a form where a company types the company name, the person, their birthday and the loan. It sends `POST /borrowers` (needs the key), which saves a borrower and a loan (migration `0002_company`, run by the SETUP step), and the call routes take an optional `borrower_id`. Seeding for evals wipes these custom borrowers. A spreadsheet upload is shown on the website but not built.
+
+## Backchannel detector
+
+`scripts/probe_backchannel.py` prints the inputs and outputs of `pipecat-ai/backchannel-detector` so it can be wired in without guessing. It is not in the pipeline yet; the model is English only and was trained on human conversation, so it needs measuring first.
+
 ## Reading calls back
 
 Every call, sentence, tool call, rule check and promise is saved to the database. `GET /calls` lists them with totals and `GET /calls/<id>` returns one in full (phone numbers are masked). The website's dashboard reads these two routes, so it shows what really happened.
@@ -79,13 +107,13 @@ The method (scripted multi-turn calls, per-turn tool checks, latency percentiles
 
 ```
 uv run modal run evals/bench.py::llm --label rtx6000-bf16 --gpu RTX-PRO-6000 --price <usd per hour>
-uv run modal run evals/bench.py::tts --label l4 --gpu L4 --price <usd per hour>
+uv run modal run evals/bench.py::tts --label a10 --gpu A10 --price <usd per hour>
 uv run python -m evals.report --write      # builds docs/performance.md
 ```
 
 The brain benchmark replays the five requests of a real call (real prompt, real tools) with 1, 4, 8 and 16 calls at once, and reports time to first token (P50/P95/P99, goal under 700 ms), tokens per second, requests per second, the prefix-cache hit rate, the cost per 1,000 requests, and the cold start. `--tools fixed` sends all eight tools on every request, so you can show what the per-state tool lists buy. Chatterbox cannot stream, so the voice benchmark times whole sentences and reports the real-time factor.
 
-What we measured so far (one RTX PRO 6000 for the brain, one L4 for the voice):
+What we measured so far (one RTX PRO 6000 for the brain, one L4 for the voice; the voice now runs on an A10, so those rows will change when it is measured again):
 
 - The brain answers its first token in 83 ms with one call, 308 ms with sixteen at once. The goal was 700 ms.
 - The voice is the slow part. It speaks a whole sentence at a time, so a caller waits about 4 to 7 seconds per turn.

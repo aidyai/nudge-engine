@@ -114,9 +114,11 @@ Same code, same image. The difference was how fast the shared volume was read on
 
 ## A cloned voice (optional)
 
+The voice runs on an A10. Nothing to set.
+
 About 10 seconds of clear speech from someone who agreed:
 
 ```
 uv run modal volume create nudge-voices
-uv run modal volume put nudge-voices ./voice.wav /voice.wav
+uv run modal volume put --force nudge-voices ./voice.wav /voice.wav
 ```

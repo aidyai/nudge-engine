@@ -14,7 +14,7 @@ from pathlib import Path
 
 import modal
 
-PINS = [f"{n}=={version(n)}" for n in ("httpx", "sqlalchemy", "pydantic", "pydantic-settings", "pyyaml", "tzdata")]
+PINS = [f"{n}=={version(n)}" for n in ("httpx", "sqlalchemy", "pydantic", "pydantic-settings", "pyyaml", "tzdata", "langfuse", "loguru")]
 image = (
     modal.Image.debian_slim(python_version="3.12")
     .uv_pip_install(*PINS, f"psycopg[binary]=={version('psycopg')}")
@@ -72,12 +72,13 @@ MONTHS = "January February March April May June July August September October No
 
 
 @app.function(image=image, secrets=[modal.Secret.from_name("nudge-env")], timeout=60 * 60)
-def run(only: str = "", runs: int = 1) -> dict:
+def run(only: str = "", runs: int = 1, label: str = "") -> dict:
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
     from sqlalchemy import create_engine, text
 
+    from engine import tracing
     from engine.agent import greet, make_chat, start_call, turn
     from engine.config import Settings
     from engine.seed import seed
@@ -101,17 +102,24 @@ def run(only: str = "", runs: int = 1) -> dict:
             dob = f"{int(day)} {MONTHS[int(month) - 1]}"
             call = start_call(db, who.id, check_dialing=False)
             print(f"\n=== {name}  run {n + 1}/{runs}  (borrower {who.id}, {sc['archetype']})")
-            print("AGENT:", greet(call, db, chat))
-            for line in sc["lines"]:
-                if call.done:
-                    break
-                line = line.format(dob=dob)
-                print("YOU:  ", line)
-                print("AGENT:", turn(call, db, line, chat))
-            res = check(db, call, sc)
+            with tracing.span(f"eval {name}", session=call.id, tags=["eval", label or "unlabelled", name], input=sc["lines"]) as step:
+                print("AGENT:", greet(call, db, chat))
+                for line in sc["lines"]:
+                    if call.done:
+                        break
+                    line = line.format(dob=dob)
+                    print("YOU:  ", line)
+                    print("AGENT:", turn(call, db, line, chat))
+                res = check(db, call, sc)
+                step.update(output=res)
+                step.score("rules_held", not res["rules"])
+                step.score("task_passed", not res["task"] and not res["tools"])
+                if res["model_ms"]:
+                    step.score("model_ms_max", max(res["model_ms"]))
             print("tools used:", ", ".join(res["used"]) or "none")
             out.setdefault(name, []).append(res)
         db.close()
+    tracing.flush()  # a short script must send what is waiting before it ends
     return {name: score(rs) for name, rs in out.items()}
 
 
@@ -185,7 +193,7 @@ def show(scores: dict) -> None:
 def main(only: str = "", runs: int = 1, label: str = ""):
     from datetime import datetime
 
-    scores = run.remote(only, runs)
+    scores = run.remote(only, runs, label)
     print("\n== results ==")
     show(scores)
     if label:

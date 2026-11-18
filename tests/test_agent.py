@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy import text
 
 from engine import lender
-from engine.agent import SAFE_LINE, STATES, TOOLS, greet, parse_day_month, run_tool, start_call, turn
+from engine.agent import RETRY_LINE, SAFE_LINE, STATES, TOOLS, greet, parse_day_month, run_tool, start_call, turn
 from engine.speech import date_to_words, naira_to_words
 from tests.conftest import TODAY
 
@@ -243,6 +243,8 @@ def test_a_reply_that_breaks_a_rule_is_fixed_or_the_call_is_handed_off(db):
     )
     assert fixed.startswith("Hello") and count(db, "select count(*) from nudge.events where type = 'output_check'") == 1
     call2 = start(db, "B002")
+    first = turn(call2, db, "Hello?", Script(say("You owe 25,000 naira."), say("Pay now or the police will come.")))
+    assert first == RETRY_LINE and not call2.done  # one slip is forgiven
     stuck = turn(call2, db, "Hello?", Script(say("You owe 25,000 naira."), say("Pay now or the police will come.")))
     assert stuck == SAFE_LINE and call2.done
     assert count(db, "select count(*) from nudge.handoffs where reason = 'policy_conflict'") == 1

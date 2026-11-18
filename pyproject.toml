@@ -8,14 +8,20 @@ dependencies = [
     "alembic>=1.20",
     "fastapi>=0.162",
     "httpx>=0.28",
+    "huggingface-hub>=2.4.0",
+    "langfuse>=3",
     "modal>=1.6",
+    "numpy>=2.5.4",
+    "onnxruntime>=1.31.1",
     "pipecat-ai[deepgram,silero,websocket]>=1.15",
     "psycopg[binary]>=3.3",
     "pydantic-settings>=2.16",
     "pyyaml>=6.0",
+    "soxr>=1.0.0",
     "sqlalchemy>=2.1",
     "tzdata",
     "uvicorn>=0.30",
+    "websockets>=17.4",
 ]
 
 [dependency-groups]

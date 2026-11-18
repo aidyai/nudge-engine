@@ -23,7 +23,7 @@ def must(db, sql, **params):
 def get_borrower(db, borrower_id):
     return one(
         db,
-        "select id, full_name, birth_day_month, calls_allowed, opted_out from lender.borrowers where id = :id",
+        "select id, full_name, birth_day_month, calls_allowed, opted_out, company from lender.borrowers where id = :id",
         id=borrower_id,
     )
 

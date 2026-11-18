@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     deepgram_api_key: str = ""
     hf_token: str = ""  # only used by scripts/check_services.py
 
+    # tracing (Langfuse, optional): leave the keys empty and nothing is sent
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+
     # phone calls (Twilio). Only numbers listed in allowed_numbers can ever be called.
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
