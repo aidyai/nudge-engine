@@ -75,8 +75,8 @@ def test_wavs_join_into_one_with_a_pause_between():
 
 
 def test_a_stored_birthday_is_said_like_a_person_says_it():
-    assert sim.spoken_birthday("03-11") == "3 November"
-    assert sim.spoken_birthday("25-12") == "25 December"
+    assert sim.spoken_birthday("03-11") == "the third of November"
+    assert sim.spoken_birthday("25-12") == "the twenty-fifth of December"
 
 
 def test_it_says_what_is_missing_instead_of_crashing(monkeypatch, capsys):

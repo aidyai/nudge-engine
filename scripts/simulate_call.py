@@ -34,10 +34,17 @@ STILL_STARTING = (408, 502, 503, 504)
 DEMO_ARCHETYPE = "cooperative_due_3d"  # the borrower the API's demo call rings
 
 
+ORDINALS = (
+    "first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth "
+    "sixteenth seventeenth eighteenth nineteenth twentieth twenty-first twenty-second twenty-third twenty-fourth "
+    "twenty-fifth twenty-sixth twenty-seventh twenty-eighth twenty-ninth thirtieth thirty-first"
+).split()
+
+
 def spoken_birthday(day_month: str) -> str:
-    """'03-11' (day-month, as stored) becomes '3 November', as a person would say it."""
+    """'03-11' (day-month, as stored) becomes 'the third of November'. Words, because a cloned voice can read '21' as '2000'."""
     day, month = day_month.split("-")
-    return f"{int(day)} {MONTHS[int(month) - 1]}"
+    return f"the {ORDINALS[int(day) - 1]} of {MONTHS[int(month) - 1]}"
 
 
 class Engine:
